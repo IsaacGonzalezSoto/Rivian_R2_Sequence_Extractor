@@ -18,6 +18,16 @@ class ExcelExporter:
         self.header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         self.header_font = Font(bold=True, color="FFFFFF")
         self.header_alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Styles for Complete_Flow sheet
+        self.transition_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        self.transition_font = Font(bold=True, color="FFFFFF", size=12)
+        self.sequence_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+        self.sequence_font = Font(bold=True, color="FFFFFF", size=11)
+        self.step_fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
+        self.step_font = Font(bold=True, color="000000", size=10)
+        self.action_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        self.action_font = Font(bold=True, size=10)
     
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], output_path: str):
         """
@@ -33,6 +43,9 @@ class ExcelExporter:
         # Remove default sheet
         if 'Sheet' in wb.sheetnames:
             wb.remove(wb['Sheet'])
+        
+        # Create Complete_Flow sheet (new main view)
+        self._create_complete_flow_sheet(wb, sequences_data, transitions_data)
         
         # Create sequences sheet
         self._create_sequences_sheet(wb, sequences_data)
@@ -222,3 +235,229 @@ class ExcelExporter:
             
             adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
             ws.column_dimensions[column_letter].width = adjusted_width
+    
+    def _create_complete_flow_sheet(self, wb: Workbook, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any]):
+        """
+        Create the Complete_Flow sheet showing the hierarchical flow.
+        
+        Args:
+            wb: Workbook object
+            sequences_data: Sequences data
+            transitions_data: Transitions data
+        """
+        ws = wb.create_sheet("Complete_Flow", 0)  # Insert as first sheet
+        
+        # Headers
+        headers = ['Type', 'Index', 'Description', 'Details', 'State/Comment']
+        
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.fill = self.header_fill
+            cell.font = self.header_font
+            cell.alignment = self.header_alignment
+        
+        row_num = 2
+        routine_name = sequences_data['routine_name']
+        
+        # Build a mapping of sequence index to transition (if they match)
+        transition_map = {}
+        if transitions_data and transitions_data.get('transitions'):
+            for transition in transitions_data['transitions']:
+                trans_idx = transition['transition_index']
+                transition_map[trans_idx] = transition
+        
+        # Process each sequence and its corresponding transition
+        for sequence in sequences_data['sequences']:
+            seq_idx = sequence['sequence_index']
+            
+            # Write Transition header if exists
+            if seq_idx in transition_map:
+                transition = transition_map[seq_idx]
+                row_num = self._write_transition_section(ws, row_num, transition)
+            
+            # Write Sequence header
+            row_num = self._write_sequence_section(ws, row_num, sequence)
+        
+        # Auto-adjust column widths
+        self._adjust_column_widths(ws)
+    
+    def _write_transition_section(self, ws, row_num: int, transition: Dict[str, Any]) -> int:
+        """
+        Write a transition section with its permissions.
+        
+        Args:
+            ws: Worksheet
+            row_num: Current row number
+            transition: Transition data
+            
+        Returns:
+            Updated row number
+        """
+        trans_idx = transition['transition_index']
+        perm_count = transition['permission_count']
+        
+        # Transition header row
+        ws.cell(row=row_num, column=1, value='TRANSITION')
+        ws.cell(row=row_num, column=2, value=trans_idx)
+        ws.cell(row=row_num, column=3, value=f'Transition {trans_idx}')
+        ws.cell(row=row_num, column=4, value=f'{perm_count} permissions')
+        
+        # Apply transition header style
+        for col in range(1, 6):
+            cell = ws.cell(row=row_num, column=col)
+            cell.fill = self.transition_fill
+            cell.font = self.transition_font
+        
+        row_num += 1
+        
+        # Write permissions
+        for permission in transition['permissions']:
+            ws.cell(row=row_num, column=1, value='  Permission')
+            ws.cell(row=row_num, column=2, value=permission['permission_index'])
+            ws.cell(row=row_num, column=3, value=permission['permission_value'])
+            ws.cell(row=row_num, column=4, value='')
+            ws.cell(row=row_num, column=5, value=permission['comment'])
+            row_num += 1
+        
+        # Add blank row for separation
+        row_num += 1
+        
+        return row_num
+    
+    def _write_sequence_section(self, ws, row_num: int, sequence: Dict[str, Any]) -> int:
+        """
+        Write a sequence section with its steps, actions, and actuators.
+        
+        Args:
+            ws: Worksheet
+            row_num: Current row number
+            sequence: Sequence data
+            
+        Returns:
+            Updated row number
+        """
+        seq_idx = sequence['sequence_index']
+        step_count = len(sequence['steps'])
+        
+        # Sequence header row
+        ws.cell(row=row_num, column=1, value='SEQUENCE')
+        ws.cell(row=row_num, column=2, value=seq_idx)
+        ws.cell(row=row_num, column=3, value=f'Sequence {seq_idx}')
+        ws.cell(row=row_num, column=4, value=f'{step_count} steps')
+        
+        # Apply sequence header style
+        for col in range(1, 6):
+            cell = ws.cell(row=row_num, column=col)
+            cell.fill = self.sequence_fill
+            cell.font = self.sequence_font
+        
+        row_num += 1
+        
+        # Write steps
+        for step in sequence['steps']:
+            row_num = self._write_step_section(ws, row_num, seq_idx, step)
+        
+        # Add blank row for separation
+        row_num += 1
+        
+        return row_num
+    
+    def _write_step_section(self, ws, row_num: int, seq_idx: int, step: Dict[str, Any]) -> int:
+        """
+        Write a step section with its actions and actuators.
+        
+        Args:
+            ws: Worksheet
+            row_num: Current row number
+            seq_idx: Sequence index
+            step: Step data
+            
+        Returns:
+            Updated row number
+        """
+        step_idx = step['step_index']
+        action_count = len(step['actions'])
+        
+        # Step header row
+        ws.cell(row=row_num, column=1, value='  STEP')
+        ws.cell(row=row_num, column=2, value=step_idx)
+        ws.cell(row=row_num, column=3, value=f'Step {step_idx}')
+        ws.cell(row=row_num, column=4, value=f'{action_count} actions')
+        
+        # Apply step header style
+        for col in range(1, 6):
+            cell = ws.cell(row=row_num, column=col)
+            cell.fill = self.step_fill
+            cell.font = self.step_font
+        
+        row_num += 1
+        
+        # Write actions
+        for action in step['actions']:
+            row_num = self._write_action_section(ws, row_num, action)
+        
+        return row_num
+    
+    def _write_action_section(self, ws, row_num: int, action: Dict[str, Any]) -> int:
+        """
+        Write an action section with its actuators.
+        
+        Args:
+            ws: Worksheet
+            row_num: Current row number
+            action: Action data
+            
+        Returns:
+            Updated row number
+        """
+        action_idx = action['action_index']
+        action_name = action['action_name']
+        mm_number = action['mm_number'] or 'N/A'
+        
+        # Format state
+        state_formatted = ''
+        if action['state']:
+            state_formatted = f"TO {action['state'].upper()}"
+        
+        # Build details with validation information
+        actuator_count = action['actuator_count']
+        details = f'{mm_number} - {actuator_count} actuators'
+        
+        # Add validation status if available
+        if 'validation' in action and action['validation']:
+            val = action['validation']
+            if val['is_valid'] == True:
+                array_dim = val.get('array_dimension', actuator_count)
+                details += f' [OK: {actuator_count}/{array_dim}]'
+            elif val['is_valid'] == False:
+                array_dim = val.get('array_dimension', 0)
+                missing = ','.join(map(str, val.get('missing_indices', [])))
+                details += f' [WARNING: {actuator_count}/{array_dim} - Missing: {missing}]'
+            elif val['is_valid'] is None:
+                details += f' [UNKNOWN]'
+        
+        # Action header row
+        ws.cell(row=row_num, column=1, value='    ACTION')
+        ws.cell(row=row_num, column=2, value=action_idx)
+        ws.cell(row=row_num, column=3, value=action_name)
+        ws.cell(row=row_num, column=4, value=details)
+        ws.cell(row=row_num, column=5, value=state_formatted)
+        
+        # Apply action header style
+        for col in range(1, 6):
+            cell = ws.cell(row=row_num, column=col)
+            cell.fill = self.action_fill
+            cell.font = self.action_font
+        
+        row_num += 1
+        
+        # Write actuators
+        for actuator in action['actuators']:
+            ws.cell(row=row_num, column=1, value='      Actuator')
+            ws.cell(row=row_num, column=2, value=actuator['index'])
+            ws.cell(row=row_num, column=3, value=actuator['description'])
+            ws.cell(row=row_num, column=4, value=mm_number)
+            row_num += 1
+        
+        return row_num
