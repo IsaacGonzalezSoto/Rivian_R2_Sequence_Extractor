@@ -13,6 +13,7 @@ from ..validators.array_validator import ArrayValidator
 from ..exporters.json_exporter import JSONExporter
 from ..exporters.csv_exporter import CSVExporter
 from ..exporters.transition_csv_exporter import TransitionCSVExporter
+from ..exporters.excel_exporter import ExcelExporter
 
 
 class ExtractionPipeline:
@@ -45,6 +46,9 @@ class ExtractionPipeline:
         self.actuator_extractor = ActuatorExtractor(debug=debug)
         self.transition_extractor = TransitionExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
+        self.excel_exporter = ExcelExporter()
+        
+        # Keep JSON/CSV exporters for debugging (not used by default)
         self.json_exporter = JSONExporter()
         self.csv_exporter = CSVExporter()
         self.transition_csv_exporter = TransitionCSVExporter()
@@ -104,80 +108,88 @@ class ExtractionPipeline:
         # Extract actions and sequences with actuators
         sequences_data = self.extract_sequences_with_actuators(routine_name)
         
-        # Format for output
-        output_data = {
+        # Format sequences for output
+        sequences_output = {
             'routine_name': routine_name,
             'sequences': sequences_data
         }
         
-        # Export sequences to JSON
-        json_filename = f'complete_{routine_name}.json'
-        json_path = os.path.join(self.output_folder, json_filename)
-        self.json_exporter.export(output_data, json_path)
+        # Extract transitions
+        transitions_output = self.extract_transitions(routine_name)
         
-        # Export sequences to CSV
-        csv_filename = f'complete_{routine_name}.csv'
-        csv_path = os.path.join(self.output_folder, csv_filename)
-        self.csv_exporter.export(output_data, csv_path)
+        # Export to Excel (one file with multiple sheets)
+        excel_filename = f'complete_{routine_name}.xlsx'
+        excel_path = os.path.join(self.output_folder, excel_filename)
         
-        print(f"\n✓ Sequences JSON saved to: {json_path}")
-        print(f"✓ Sequences CSV saved to: {csv_path}")
-        print(f"✓ Sequences processed: {len(sequences_data)}")
+        self.excel_exporter.export(sequences_output, transitions_output, excel_path)
         
-        # Process transitions
-        transitions_result = self.process_transitions(routine_name)
+        print(f"\n✓ Excel file saved to: {excel_path}")
+        print(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
+        print(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
+        
+        # Optional: Export to JSON/CSV for debugging (commented out by default)
+        # self._export_debug_files(routine_name, sequences_output, transitions_output)
         
         return {
             'routine_name': routine_name,
-            'sequences_file': json_path,
-            'sequences_csv': csv_path,
+            'excel_file': excel_path,
             'sequences_count': len(sequences_data),
-            'transitions_file': transitions_result.get('json_path'),
-            'transitions_csv': transitions_result.get('csv_path'),
-            'transitions_count': transitions_result.get('count', 0)
+            'transitions_count': transitions_output.get('transition_count', 0)
         }
     
-    def process_transitions(self, routine_name: str) -> Dict[str, Any]:
+    def extract_transitions(self, routine_name: str) -> Dict[str, Any]:
         """
-        Process transitions for a routine.
+        Extract transitions for a routine.
         
         Args:
             routine_name: Name of the routine to process
             
         Returns:
-            Dictionary with transition processing information
+            Dictionary with transition data
         """
-        print(f"\n--- Processing Transitions for {routine_name} ---")
+        if self.debug:
+            print(f"\n--- Extracting Transitions for {routine_name} ---")
         
-        # Extract transitions
+        # Extract transitions using the extractor
         transitions_data = self.transition_extractor.extract(
             self.navigator.get_root(),
             routine_name
         )
         
-        if not transitions_data['transitions']:
-            print("  No transitions found")
-            return {'count': 0}
+        return transitions_data
+    
+    def _export_debug_files(self, routine_name: str, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any]):
+        """
+        Export JSON/CSV files for debugging purposes.
+        This method is optional and can be called when needed.
+        
+        Args:
+            routine_name: Name of the routine
+            sequences_data: Sequences data
+            transitions_data: Transitions data
+        """
+        # Export sequences to JSON
+        json_filename = f'debug_sequences_{routine_name}.json'
+        json_path = os.path.join(self.output_folder, json_filename)
+        self.json_exporter.export(sequences_data, json_path)
+        
+        # Export sequences to CSV
+        csv_filename = f'debug_sequences_{routine_name}.csv'
+        csv_path = os.path.join(self.output_folder, csv_filename)
+        self.csv_exporter.export(sequences_data, csv_path)
         
         # Export transitions to JSON
-        json_filename = f'transitions_{routine_name}.json'
-        json_path = os.path.join(self.output_folder, json_filename)
-        self.json_exporter.export(transitions_data, json_path)
+        if transitions_data.get('transitions'):
+            trans_json_filename = f'debug_transitions_{routine_name}.json'
+            trans_json_path = os.path.join(self.output_folder, trans_json_filename)
+            self.json_exporter.export(transitions_data, trans_json_path)
+            
+            # Export transitions to CSV
+            trans_csv_filename = f'debug_transitions_{routine_name}.csv'
+            trans_csv_path = os.path.join(self.output_folder, trans_csv_filename)
+            self.transition_csv_exporter.export(transitions_data, trans_csv_path)
         
-        # Export transitions to CSV
-        csv_filename = f'transitions_{routine_name}.csv'
-        csv_path = os.path.join(self.output_folder, csv_filename)
-        self.transition_csv_exporter.export(transitions_data, csv_path)
-        
-        print(f"✓ Transitions JSON saved to: {json_path}")
-        print(f"✓ Transitions CSV saved to: {csv_path}")
-        print(f"✓ Transitions processed: {transitions_data['transition_count']}")
-        
-        return {
-            'json_path': json_path,
-            'csv_path': csv_path,
-            'count': transitions_data['transition_count']
-        }
+        print(f"✓ Debug files exported for {routine_name}")
     
     def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
         """

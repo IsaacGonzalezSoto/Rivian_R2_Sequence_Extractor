@@ -1,5 +1,5 @@
 """
-Punto de entrada principal del sistema de extracción de L5X.
+Main entry point for the L5X extraction system.
 """
 import sys
 import os
@@ -19,54 +19,47 @@ def print_summary(routines_data):
     
     for routine_info in routines_data:
         print(f"\n📄 {routine_info['routine_name']}")
-        print(f"   Sequences:")
-        print(f"     JSON: {routine_info.get('sequences_file', 'N/A')}")
-        print(f"     CSV: {routine_info.get('sequences_csv', 'N/A')}")
-        print(f"     Count: {routine_info.get('sequences_count', 0)}")
-        
-        if routine_info.get('transitions_file'):
-            print(f"   Transitions:")
-            print(f"     JSON: {routine_info['transitions_file']}")
-            print(f"     CSV: {routine_info['transitions_csv']}")
-            print(f"     Count: {routine_info['transitions_count']}")
+        print(f"   Excel File: {routine_info['excel_file']}")
+        print(f"   - Sequences: {routine_info['sequences_count']}")
+        print(f"   - Transitions: {routine_info['transitions_count']}")
 
 
 def main():
     """
-    Función principal del programa.
+    Main program function.
     """
-    # Configuración
+    # Configuration
     l5x_file = "_010UA1_Fixture_Em0105_Program.L5X"
     output_folder = "output"
     debug = True
     
-    # Validar que el archivo existe
+    # Validate that the file exists
     if not os.path.exists(l5x_file):
-        print(f"❌ Error: No se encontró el archivo {l5x_file}")
-        print("Por favor, actualiza la ruta del archivo L5X.")
+        print(f"❌ Error: File not found {l5x_file}")
+        print("Please update the L5X file path.")
         sys.exit(1)
     
     try:
-        # Crear y ejecutar pipeline
+        # Create and execute pipeline
         pipeline = ExtractionPipeline(
             l5x_file_path=l5x_file,
             output_folder=output_folder,
             debug=debug
         )
         
-        # Ejecutar extracción
+        # Execute extraction
         routines_data = pipeline.run()
         
-        # Mostrar resumen
+        # Show summary
         print_summary(routines_data)
         
-        print("\n✅ Proceso completado exitosamente")
+        print("\n✅ Process completed successfully")
         
     except FileNotFoundError as e:
-        print(f"❌ Error: Archivo no encontrado - {e}")
+        print(f"❌ Error: File not found - {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error durante el procesamiento: {str(e)}")
+        print(f"❌ Error during processing: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
