@@ -49,8 +49,12 @@ class TransitionExtractor(BaseExtractor):
         # Get the regex pattern
         pattern = self.get_pattern()
         
+        # Pattern to extract transition names from #region comments
+        region_pattern = r'#region\s+Transition\s+State\s+(\d+)\s+-\s+(.+)'
+        
         # Structure to store transitions
         transitions = defaultdict(list)
+        transition_names = {}  # Map transition_index -> descriptive_name
         
         # Get all lines from the routine
         lines = navigator.get_routine_lines(routine)
@@ -58,7 +62,16 @@ class TransitionExtractor(BaseExtractor):
         for line in lines:
             line_text = line.text if line.text else ''
             
-            # Search for all pattern matches
+            # Check for #region comments to extract transition names
+            region_match = re.search(region_pattern, line_text)
+            if region_match:
+                trans_idx = int(region_match.group(1))
+                trans_name = region_match.group(2).strip()
+                transition_names[trans_idx] = trans_name
+                if self.debug:
+                    print(f"  Found transition name: State {trans_idx} - {trans_name}")
+            
+            # Search for all pattern matches (permissions)
             matches = re.finditer(pattern, line_text)
             for match in matches:
                 transition_idx = int(match.group(1))
@@ -86,8 +99,12 @@ class TransitionExtractor(BaseExtractor):
             # Sort permissions by index
             permissions = sorted(transitions[trans_idx], key=lambda x: x['permission_index'])
             
+            # Get descriptive name if available
+            descriptive_name = transition_names.get(trans_idx, None)
+            
             result.append({
                 'transition_index': trans_idx,
+                'transition_name': descriptive_name,  # New field
                 'permission_count': len(permissions),
                 'permissions': permissions
             })
