@@ -204,8 +204,13 @@ class ExtractionPipeline:
         # Pattern to extract action assignments
         pattern = r'EmSeqList\[(\d+)\]\.Step\[(\d+)\]\.ActionNumber\[(\d+)\]\s*:=\s*(\w+)\.outActionNum'
         
+        # Patterns to extract sequence names
+        region_pattern = r'#region\s+Sequence\s+(\d+)\s+-\s+(.+)'
+        name_pattern = r"EmSeqList\[(\d+)\]\.Name\s*:=\s*'([^']+)'"
+        
         # Structure to store results
         sequences = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        sequence_names = {}  # Map sequence_index -> descriptive_name
         
         # Get routine
         routine = self.navigator.find_routine_by_name(routine_name)
@@ -217,6 +222,27 @@ class ExtractionPipeline:
         
         for line in lines:
             line_text = line.text if line.text else ''
+            
+            # Check for #region comments to extract sequence names
+            region_match = re.search(region_pattern, line_text)
+            if region_match:
+                seq_idx = int(region_match.group(1))
+                seq_name = region_match.group(2).strip()
+                sequence_names[seq_idx] = seq_name
+                if self.debug:
+                    print(f"  Found sequence name from #region: Sequence {seq_idx} - {seq_name}")
+            
+            # If not found in #region, check hardcoded Name
+            if not region_match:
+                name_match = re.search(name_pattern, line_text)
+                if name_match:
+                    seq_idx = int(name_match.group(1))
+                    seq_name = name_match.group(2).strip()
+                    # Only store if we haven't found it in #region
+                    if seq_idx not in sequence_names:
+                        sequence_names[seq_idx] = seq_name
+                        if self.debug:
+                            print(f"  Found sequence name from hardcoded: Sequence {seq_idx} - {seq_name}")
             
             # Search for action assignments
             matches = re.finditer(pattern, line_text)
@@ -275,8 +301,8 @@ class ExtractionPipeline:
                         'full_assignment': match.group(0)
                     }
         
-        # Convert to structured list
-        return self.format_sequences(sequences)
+        # Convert to list structured format and add sequence names
+        return self.format_sequences(sequences, sequence_names)
     
     def parse_action_name(self, action_name: str) -> Dict[str, str]:
         """
@@ -298,21 +324,26 @@ class ExtractionPipeline:
             }
         return None
     
-    def format_sequences(self, sequences: Dict) -> List[Dict[str, Any]]:
+    def format_sequences(self, sequences: Dict, sequence_names: Dict[int, str] = None) -> List[Dict[str, Any]]:
         """
         Format sequences for structured output.
         
         Args:
             sequences: Nested dictionary with sequences
+            sequence_names: Optional dictionary mapping sequence_index to descriptive_name
             
         Returns:
             List of formatted sequences
         """
+        if sequence_names is None:
+            sequence_names = {}
+        
         formatted = []
         
         for seq_idx in sorted(sequences.keys()):
             sequence = {
                 'sequence_index': seq_idx,
+                'sequence_name': sequence_names.get(seq_idx, None),  # New field
                 'steps': []
             }
             

@@ -297,10 +297,16 @@ class ExcelExporter:
         trans_idx = transition['transition_index']
         perm_count = transition['permission_count']
         
+        # Use descriptive name if available, otherwise use default
+        if transition.get('transition_name'):
+            description = f"Transition State {trans_idx} - {transition['transition_name']}"
+        else:
+            description = f"Transition {trans_idx}"
+        
         # Transition header row
         ws.cell(row=row_num, column=1, value='TRANSITION')
         ws.cell(row=row_num, column=2, value=trans_idx)
-        ws.cell(row=row_num, column=3, value=f'Transition {trans_idx}')
+        ws.cell(row=row_num, column=3, value=description)
         ws.cell(row=row_num, column=4, value=f'{perm_count} permissions')
         
         # Apply transition header style
@@ -340,10 +346,16 @@ class ExcelExporter:
         seq_idx = sequence['sequence_index']
         step_count = len(sequence['steps'])
         
+        # Use descriptive name if available, otherwise use default
+        if sequence.get('sequence_name'):
+            description = f"Sequence State {seq_idx} - {sequence['sequence_name']}"
+        else:
+            description = f"Sequence {seq_idx}"
+        
         # Sequence header row
         ws.cell(row=row_num, column=1, value='SEQUENCE')
         ws.cell(row=row_num, column=2, value=seq_idx)
-        ws.cell(row=row_num, column=3, value=f'Sequence {seq_idx}')
+        ws.cell(row=row_num, column=3, value=description)
         ws.cell(row=row_num, column=4, value=f'{step_count} steps')
         
         # Apply sequence header style
