@@ -1,0 +1,126 @@
+"""
+Specialized extractor for actuators from MM routines.
+"""
+import re
+from typing import Dict, List, Any
+from ..core.base_extractor import BaseExtractor
+
+
+class ActuatorExtractor(BaseExtractor):
+    """
+    Extracts actuator information from MM routines in the L5X.
+    Searches for patterns: MOVE('DESCRIPTION', MM{X}Cyls[INDEX].Stg.Name)
+    """
+    
+    def get_pattern(self) -> str:
+        """
+        Returns the regex pattern to extract actuators.
+        
+        Returns:
+            Regex pattern for MOVE statements
+        """
+        return r"MOVE\('([^']+)',\s*{mm_number}Cyls\[(\d+)\]\.Stg\.Name\)"
+    
+    def find_items(self, root, routine_name: str) -> List[Dict[str, Any]]:
+        """
+        Search for actuators in a specific MM routine.
+        
+        Args:
+            root: XML tree root
+            routine_name: Routine name (e.g., 'Cm010507_MM4')
+            
+        Returns:
+            List of dictionaries with actuator information
+        """
+        from ..core.xml_navigator import XMLNavigator
+        
+        navigator = XMLNavigator.__new__(XMLNavigator)
+        navigator.root = root
+        
+        # Search for the specific routine
+        routine = navigator.find_routine_by_name(routine_name)
+        
+        if not routine:
+            if self.debug:
+                print(f"  ⚠️  Routine not found: {routine_name}")
+            return []
+        
+        # Extract MM number from routine name
+        mm_match = re.search(r'(MM\d+)', routine_name)
+        if not mm_match:
+            if self.debug:
+                print(f"  ⚠️  Could not extract MM number from: {routine_name}")
+            return []
+        
+        mm_number = mm_match.group(1)
+        
+        # Get pattern with specific MM number
+        pattern = self.get_pattern().replace('{mm_number}', mm_number)
+        
+        actuators = []
+        
+        # Search in all rungs of the routine
+        rungs = navigator.get_routine_rungs(routine)
+        
+        for rung in rungs:
+            text_element = rung.find('.//Text')
+            if text_element is not None and text_element.text:
+                text = text_element.text
+                
+                # Find all pattern matches
+                matches = re.finditer(pattern, text)
+                for match in matches:
+                    description = match.group(1)
+                    index = int(match.group(2))
+                    
+                    actuators.append({
+                        'index': index,
+                        'description': description,
+                        'mm_number': mm_number
+                    })
+                    
+                    if self.debug:
+                        print(f"      [{index}] {description}")
+        
+        # Sort by index
+        actuators.sort(key=lambda x: x['index'])
+        
+        return actuators
+    
+    def find_actuators_for_mm(self, root, mm_number: str) -> List[Dict[str, Any]]:
+        """
+        Search for all actuators for a specific MM.
+        Automatically finds the corresponding routine.
+        
+        Args:
+            root: XML tree root
+            mm_number: MM number (e.g., 'MM4')
+            
+        Returns:
+            List of found actuators
+        """
+        from ..core.xml_navigator import XMLNavigator
+        
+        navigator = XMLNavigator.__new__(XMLNavigator)
+        navigator.root = root
+        
+        # Pattern to find the correct routine (e.g., Cm010507_MM4)
+        routine_pattern = f'_{mm_number}$|_{mm_number}_'
+        
+        # Search for routines containing the pattern
+        matching_routines = navigator.find_routines_by_pattern(routine_pattern)
+        
+        if not matching_routines:
+            if self.debug:
+                print(f"    ⚠️  No routine found for {mm_number}")
+            return []
+        
+        # Use the first matching routine
+        routine = matching_routines[0]
+        routine_name = routine.get('Name', '')
+        
+        if self.debug:
+            print(f"    → Found actuator routine: {routine_name}")
+        
+        # Extract actuators
+        return self.find_items(root, routine_name)
