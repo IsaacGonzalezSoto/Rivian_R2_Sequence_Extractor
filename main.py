@@ -208,7 +208,9 @@ def main():
     
     if not l5x_files:
         print("\nNo L5X files found in current directory.")
-        print("Please ensure .L5X files are in the same folder as this script.")
+        print("Please ensure .L5X files are in the same folder as this program.")
+        print("\nPress Enter to exit...")
+        input()
         sys.exit(0)
     
     # Display available files
@@ -241,14 +243,20 @@ def main():
     try:
         process_files(l5x_files, selected_indices, debug=True)
         print("\nAll processing complete!")
+        print("\nPress Enter to exit...")
+        input()
         
     except KeyboardInterrupt:
         print("\n\nProcessing interrupted by user.")
+        print("\nPress Enter to exit...")
+        input()
         sys.exit(1)
     except Exception as e:
         print(f"\nUnexpected error: {str(e)}")
         import traceback
         traceback.print_exc()
+        print("\nPress Enter to exit...")
+        input()
         sys.exit(1)
 
 
