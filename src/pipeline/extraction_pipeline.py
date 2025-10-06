@@ -1,6 +1,6 @@
 """
 Extraction pipeline that orchestrates the entire process.
-Coordinates extractors, validators, and exporters.
+Coordinates extractors, validators, and Excel exporter.
 """
 import os
 import re
@@ -10,16 +10,13 @@ from ..core.xml_navigator import XMLNavigator
 from ..extractors.actuator_extractor import ActuatorExtractor
 from ..extractors.transition_extractor import TransitionExtractor
 from ..validators.array_validator import ArrayValidator
-from ..exporters.json_exporter import JSONExporter
-from ..exporters.csv_exporter import CSVExporter
-from ..exporters.transition_csv_exporter import TransitionCSVExporter
 from ..exporters.excel_exporter import ExcelExporter
 
 
 class ExtractionPipeline:
     """
     Main extraction process orchestrator.
-    Coordinates data extraction, validation, and export.
+    Coordinates data extraction, validation, and Excel export.
     """
     
     def __init__(self, l5x_file_path: str, output_folder: str = 'output', debug: bool = True):
@@ -28,7 +25,7 @@ class ExtractionPipeline:
         
         Args:
             l5x_file_path: Path to the L5X file
-            output_folder: Folder to save results
+            output_folder: Folder to save Excel results
             debug: Debug mode for detailed logging
         """
         self.l5x_file_path = l5x_file_path
@@ -47,11 +44,6 @@ class ExtractionPipeline:
         self.transition_extractor = TransitionExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
-        
-        # Keep JSON/CSV exporters for debugging (not used by default)
-        self.json_exporter = JSONExporter()
-        self.csv_exporter = CSVExporter()
-        self.transition_csv_exporter = TransitionCSVExporter()
     
     def run(self) -> List[Dict[str, Any]]:
         """
@@ -127,9 +119,6 @@ class ExtractionPipeline:
         print(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
         print(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
         
-        # Optional: Export to JSON/CSV for debugging (commented out by default)
-        # self._export_debug_files(routine_name, sequences_output, transitions_output)
-        
         return {
             'routine_name': routine_name,
             'excel_file': excel_path,
@@ -157,39 +146,6 @@ class ExtractionPipeline:
         )
         
         return transitions_data
-    
-    def _export_debug_files(self, routine_name: str, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any]):
-        """
-        Export JSON/CSV files for debugging purposes.
-        This method is optional and can be called when needed.
-        
-        Args:
-            routine_name: Name of the routine
-            sequences_data: Sequences data
-            transitions_data: Transitions data
-        """
-        # Export sequences to JSON
-        json_filename = f'debug_sequences_{routine_name}.json'
-        json_path = os.path.join(self.output_folder, json_filename)
-        self.json_exporter.export(sequences_data, json_path)
-        
-        # Export sequences to CSV
-        csv_filename = f'debug_sequences_{routine_name}.csv'
-        csv_path = os.path.join(self.output_folder, csv_filename)
-        self.csv_exporter.export(sequences_data, csv_path)
-        
-        # Export transitions to JSON
-        if transitions_data.get('transitions'):
-            trans_json_filename = f'debug_transitions_{routine_name}.json'
-            trans_json_path = os.path.join(self.output_folder, trans_json_filename)
-            self.json_exporter.export(transitions_data, trans_json_path)
-            
-            # Export transitions to CSV
-            trans_csv_filename = f'debug_transitions_{routine_name}.csv'
-            trans_csv_path = os.path.join(self.output_folder, trans_csv_filename)
-            self.transition_csv_exporter.export(transitions_data, trans_csv_path)
-        
-        print(f"✓ Debug files exported for {routine_name}")
     
     def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
         """
@@ -344,6 +300,190 @@ class ExtractionPipeline:
             sequence = {
                 'sequence_index': seq_idx,
                 'sequence_name': sequence_names.get(seq_idx, None),  # New field
+                'steps': []
+            }
+            
+            for step_idx in sorted(sequences[seq_idx].keys()):
+                step = {
+                    'step_index': step_idx,
+                    'actions': []
+                }
+                
+                for action_idx in sorted(sequences[seq_idx][step_idx].keys()):
+                    action_data = sequences[seq_idx][step_idx][action_idx]
+                    
+                    action = {
+                        'action_index': action_idx,
+                        'action_name': action_data['action_name'],
+                        'mm_number': action_data['mm_number'],
+                        'state': action_data['state'],
+                        'actuator_count': len(action_data['actuators']),
+                        'actuators': action_data['actuators']
+                    }
+                    
+                    if action_data['validation']:
+                        action['validation'] = action_data['validation']
+                    
+                    step['actions'].append(action)
+                
+                sequence['steps'].append(step)
+            
+            formatted.append(sequence)
+        
+        return formatted
+    
+    def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
+        """
+        Extract sequences with their associated actions and actuators.
+        
+        Args:
+            routine_name: Name of the sequence routine
+            
+        Returns:
+            List of sequences with complete information
+        """
+        # Pattern to extract action assignments
+        pattern = r'EmSeqList\[(\d+)\]\.Step\[(\d+)\]\.ActionNumber\[(\d+)\]\s*:=\s*(\w+)\.outActionNum'
+        
+        # Patterns to extract sequence names
+        region_pattern = r'#region\s+Sequence\s+(\d+)\s+-\s+(.+)'
+        name_pattern = r"EmSeqList\[(\d+)\]\.Name\s*:=\s*'([^']+)'"
+        
+        # Structure to store results
+        sequences = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        sequence_names = {}  # Map sequence_index -> descriptive_name
+        
+        # Get routine
+        routine = self.navigator.find_routine_by_name(routine_name)
+        if not routine:
+            return []
+        
+        # Process routine lines
+        lines = self.navigator.get_routine_lines(routine)
+        
+        for line in lines:
+            line_text = line.text if line.text else ''
+            
+            # Extract sequence names from #region comments
+            region_match = re.search(region_pattern, line_text)
+            if region_match:
+                seq_idx = int(region_match.group(1))
+                seq_name = region_match.group(2).strip()
+                sequence_names[seq_idx] = seq_name
+                if self.debug:
+                    print(f"  Found sequence: [{seq_idx}] {seq_name}")
+            
+            # Extract sequence names from hardcoded assignments
+            if not region_match:
+                name_match = re.search(name_pattern, line_text)
+                if name_match:
+                    seq_idx = int(name_match.group(1))
+                    seq_name = name_match.group(2).strip()
+                    if seq_idx not in sequence_names:
+                        sequence_names[seq_idx] = seq_name
+                        if self.debug:
+                            print(f"  Found sequence: [{seq_idx}] {seq_name}")
+            
+            # Search for action assignments
+            matches = re.finditer(pattern, line_text)
+            
+            for match in matches:
+                seq_idx = int(match.group(1))
+                step_idx = int(match.group(2))
+                action_idx = int(match.group(3))
+                action_name = match.group(4)
+                
+                # Parse action name
+                action_info = self.parse_action_name(action_name)
+                
+                if action_info:
+                    mm_number = action_info['mm_number']
+                    state = action_info['state']
+                    
+                    if self.debug:
+                        print(f"\n  Action: {action_name}")
+                        print(f"    MM: {mm_number}, State: {state}")
+                        print(f"    Seq[{seq_idx}].Step[{step_idx}].Action[{action_idx}]")
+                        print(f"    Extracting actuators...")
+                    
+                    # Extract actuators
+                    actuators = self.actuator_extractor.find_actuators_for_mm(
+                        self.navigator.get_root(), 
+                        mm_number
+                    )
+                    
+                    # Validate actuators
+                    validation = self.validator.validate_actuators(
+                        self.navigator.get_root(),
+                        mm_number,
+                        actuators
+                    )
+                    
+                    sequences[seq_idx][step_idx][action_idx] = {
+                        'action_name': action_name,
+                        'mm_number': mm_number,
+                        'state': state,
+                        'actuators': actuators,
+                        'validation': validation,
+                        'full_assignment': match.group(0)
+                    }
+                else:
+                    # Action without MM pattern
+                    if self.debug:
+                        print(f"\n  Action (no MM pattern): {action_name}")
+                    
+                    sequences[seq_idx][step_idx][action_idx] = {
+                        'action_name': action_name,
+                        'mm_number': None,
+                        'state': None,
+                        'actuators': [],
+                        'validation': None,
+                        'full_assignment': match.group(0)
+                    }
+        
+        # Convert to structured list format
+        return self.format_sequences(sequences, sequence_names)
+    
+    def parse_action_name(self, action_name: str) -> Dict[str, str]:
+        """
+        Parse an action name to extract MM number and state.
+        
+        Args:
+            action_name: Action name (e.g., 'ActionMM4Work')
+            
+        Returns:
+            Dictionary with mm_number and state, or None if pattern doesn't match
+        """
+        pattern = r'Action(MM\d+)(\w+)'
+        match = re.match(pattern, action_name)
+        
+        if match:
+            return {
+                'mm_number': match.group(1),
+                'state': match.group(2)
+            }
+        return None
+    
+    def format_sequences(self, sequences: Dict, sequence_names: Dict[int, str] = None) -> List[Dict[str, Any]]:
+        """
+        Format sequences into structured output.
+        
+        Args:
+            sequences: Nested dictionary with sequence data
+            sequence_names: Optional dictionary mapping sequence_index to descriptive_name
+            
+        Returns:
+            List of formatted sequences
+        """
+        if sequence_names is None:
+            sequence_names = {}
+        
+        formatted = []
+        
+        for seq_idx in sorted(sequences.keys()):
+            sequence = {
+                'sequence_index': seq_idx,
+                'sequence_name': sequence_names.get(seq_idx, None),
                 'steps': []
             }
             
