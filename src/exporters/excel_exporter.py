@@ -15,6 +15,7 @@ class ExcelExporter:
     
     def __init__(self):
         """Initialize the Excel exporter."""
+        # Header styles
         self.header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         self.header_font = Font(bold=True, color="FFFFFF")
         self.header_alignment = Alignment(horizontal="center", vertical="center")
@@ -28,6 +29,9 @@ class ExcelExporter:
         self.step_font = Font(bold=True, color="000000", size=10)
         self.action_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
         self.action_font = Font(bold=True, size=10)
+        
+        # Data cell background - soft beige for eye comfort
+        self.data_fill = PatternFill(start_color="F5F5DC", end_color="F5F5DC", fill_type="solid")
     
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], output_path: str):
         """
@@ -137,7 +141,8 @@ class ExcelExporter:
                         ]
                         
                         for col_num, value in enumerate(row_data, 1):
-                            ws.cell(row=row_num, column=col_num, value=value)
+                            cell = ws.cell(row=row_num, column=col_num, value=value)
+                            cell.fill = self.data_fill  # Apply beige background
                         row_num += 1
                     else:
                         # One row per actuator
@@ -157,7 +162,8 @@ class ExcelExporter:
                             ]
                             
                             for col_num, value in enumerate(row_data, 1):
-                                ws.cell(row=row_num, column=col_num, value=value)
+                                cell = ws.cell(row=row_num, column=col_num, value=value)
+                                cell.fill = self.data_fill  # Apply beige background
                             row_num += 1
         
         # Auto-adjust column widths
@@ -209,7 +215,8 @@ class ExcelExporter:
                 ]
                 
                 for col_num, value in enumerate(row_data, 1):
-                    ws.cell(row=row_num, column=col_num, value=value)
+                    cell = ws.cell(row=row_num, column=col_num, value=value)
+                    cell.fill = self.data_fill  # Apply beige background
                 row_num += 1
         
         # Auto-adjust column widths
@@ -317,13 +324,19 @@ class ExcelExporter:
         
         row_num += 1
         
-        # Write permissions
+        # Write permissions with beige background
         for permission in transition['permissions']:
             ws.cell(row=row_num, column=1, value='  Permission')
             ws.cell(row=row_num, column=2, value=permission['permission_index'])
             ws.cell(row=row_num, column=3, value=permission['permission_value'])
             ws.cell(row=row_num, column=4, value='')
             ws.cell(row=row_num, column=5, value=permission['comment'])
+            
+            # Apply beige background to permission rows
+            for col in range(1, 6):
+                cell = ws.cell(row=row_num, column=col)
+                cell.fill = self.data_fill
+            
             row_num += 1
         
         # Add blank row for separation
@@ -464,12 +477,18 @@ class ExcelExporter:
         
         row_num += 1
         
-        # Write actuators
+        # Write actuators with beige background
         for actuator in action['actuators']:
             ws.cell(row=row_num, column=1, value='      Actuator')
             ws.cell(row=row_num, column=2, value=actuator['index'])
             ws.cell(row=row_num, column=3, value=actuator['description'])
             ws.cell(row=row_num, column=4, value=mm_number)
+            
+            # Apply beige background to actuator rows
+            for col in range(1, 6):
+                cell = ws.cell(row=row_num, column=col)
+                cell.fill = self.data_fill
+            
             row_num += 1
         
         return row_num
