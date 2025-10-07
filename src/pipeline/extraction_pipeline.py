@@ -9,6 +9,7 @@ from collections import defaultdict
 from ..core.xml_navigator import XMLNavigator
 from ..extractors.actuator_extractor import ActuatorExtractor
 from ..extractors.transition_extractor import TransitionExtractor
+from ..extractors.digital_input_extractor import DigitalInputExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
 
@@ -42,6 +43,7 @@ class ExtractionPipeline:
         # Initialize components
         self.actuator_extractor = ActuatorExtractor(debug=debug)
         self.transition_extractor = TransitionExtractor(debug=debug)
+        self.digital_input_extractor = DigitalInputExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
     
@@ -109,21 +111,26 @@ class ExtractionPipeline:
         # Extract transitions
         transitions_output = self.extract_transitions(routine_name)
         
+        # Extract digital inputs (independent from sequences/transitions)
+        digital_inputs_output = self.extract_digital_inputs()
+        
         # Export to Excel (one file with multiple sheets)
         excel_filename = f'complete_{routine_name}.xlsx'
         excel_path = os.path.join(self.output_folder, excel_filename)
         
-        self.excel_exporter.export(sequences_output, transitions_output, excel_path)
+        self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, excel_path)
         
         print(f"\n✓ Excel file saved to: {excel_path}")
         print(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
         print(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
+        print(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
         
         return {
             'routine_name': routine_name,
             'excel_file': excel_path,
             'sequences_count': len(sequences_data),
-            'transitions_count': transitions_output.get('transition_count', 0)
+            'transitions_count': transitions_output.get('transition_count', 0),
+            'digital_inputs_count': digital_inputs_output.get('input_count', 0)
         }
     
     def extract_transitions(self, routine_name: str) -> Dict[str, Any]:
@@ -146,6 +153,25 @@ class ExtractionPipeline:
         )
         
         return transitions_data
+    
+    def extract_digital_inputs(self) -> Dict[str, Any]:
+        """
+        Extract digital input tags from all programs.
+        This is independent from sequences and transitions.
+        
+        Returns:
+            Dictionary with digital input data
+        """
+        if self.debug:
+            print(f"\n--- Extracting Digital Inputs (UDT_DigitalInputHal) ---")
+        
+        # Extract all digital inputs from the entire L5X
+        digital_inputs = self.digital_input_extractor.extract_all_digital_inputs(
+            self.navigator.get_root()
+        )
+        
+        # Format output
+        return self.digital_input_extractor.format_output(digital_inputs)
     
     def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
         """

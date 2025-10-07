@@ -33,13 +33,14 @@ class ExcelExporter:
         # Data cell background - soft beige for eye comfort
         self.data_fill = PatternFill(start_color="F5F5DC", end_color="F5F5DC", fill_type="solid")
     
-    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], output_path: str):
+    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], output_path: str):
         """
-        Export sequences and transitions to a single Excel file with multiple sheets.
+        Export sequences, transitions, and digital inputs to a single Excel file with multiple sheets.
         
         Args:
             sequences_data: Dictionary with sequence and actuator data
             transitions_data: Dictionary with transition permission data
+            digital_inputs_data: Dictionary with digital input tags data
             output_path: Path for the output Excel file
         """
         wb = Workbook()
@@ -57,6 +58,10 @@ class ExcelExporter:
         # Create transitions sheet if there's data
         if transitions_data and transitions_data.get('transitions'):
             self._create_transitions_sheet(wb, transitions_data)
+        
+        # Create digital inputs sheet if there's data
+        if digital_inputs_data and digital_inputs_data.get('digital_inputs'):
+            self._create_digital_inputs_sheet(wb, digital_inputs_data)
         
         # Save workbook
         wb.save(output_path)
@@ -165,6 +170,50 @@ class ExcelExporter:
                                 cell = ws.cell(row=row_num, column=col_num, value=value)
                                 cell.fill = self.data_fill  # Apply beige background
                             row_num += 1
+        
+        # Auto-adjust column widths
+        self._adjust_column_widths(ws)
+    
+    def _create_digital_inputs_sheet(self, wb: Workbook, data: Dict[str, Any]):
+        """
+        Create the Digital Inputs sheet.
+        
+        Args:
+            wb: Workbook object
+            data: Digital inputs data
+        """
+        ws = wb.create_sheet("Digital Inputs")
+        
+        # Headers
+        headers = [
+            'Program',
+            'Tag Name',
+            'Description',
+            'Parent Name'
+        ]
+        
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.fill = self.header_fill
+            cell.font = self.header_font
+            cell.alignment = self.header_alignment
+        
+        # Write data
+        row_num = 2
+        
+        for digital_input in data['digital_inputs']:
+            row_data = [
+                digital_input['program'],
+                digital_input['tag_name'],
+                digital_input['description'],
+                digital_input['parent_name']
+            ]
+            
+            for col_num, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=value)
+                cell.fill = self.data_fill  # Apply beige background
+            row_num += 1
         
         # Auto-adjust column widths
         self._adjust_column_widths(ws)
