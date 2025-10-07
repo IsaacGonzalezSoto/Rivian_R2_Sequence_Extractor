@@ -3,6 +3,9 @@ Validator to verify the completeness of actuator arrays.
 """
 from typing import List, Dict, Any
 from ..core.xml_navigator import XMLNavigator
+from ..core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ArrayValidator:
@@ -22,17 +25,16 @@ class ArrayValidator:
     def validate_actuators(self, root, mm_number: str, actuators: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Validates that all indices of the actuator array have a description.
-        
+
         Args:
             root: XML tree root
             mm_number: MM number (e.g., 'MM4')
             actuators: List of found actuators
-            
+
         Returns:
             Dictionary with validation information
         """
-        navigator = XMLNavigator.__new__(XMLNavigator)
-        navigator.root = root
+        navigator = XMLNavigator(root=root)
         
         array_name = f'{mm_number}Cyls'
         dimension = navigator.get_tag_dimension(array_name)
@@ -49,7 +51,7 @@ class ArrayValidator:
             validation['is_valid'] = None
             validation['warning'] = f'Tag {array_name} not found'
             if self.debug:
-                print(f"      ⚠️  Warning: No dimension found for {array_name}")
+                logger.warning(f"No dimension found for {array_name}")
             return validation
         
         # Get indices that have a description
@@ -63,11 +65,11 @@ class ArrayValidator:
             validation['is_valid'] = False
             validation['missing_indices'] = missing_indices
             if self.debug:
-                print(f"      ⚠️  WARNING: Missing descriptions for indices: {missing_indices}")
-                print(f"      Array dimension: {dimension}, Descriptions found: {len(actuators)}")
+                logger.warning(f"Missing descriptions for indices: {missing_indices}")
+                logger.warning(f"Array dimension: {dimension}, Descriptions found: {len(actuators)}")
         else:
             if self.debug:
-                print(f"      ✓ Validation OK: All {dimension} indices have a description")
+                logger.info(f"✓ Validation OK: All {dimension} indices have a description")
         
         return validation
     

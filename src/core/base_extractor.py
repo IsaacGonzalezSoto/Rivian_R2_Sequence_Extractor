@@ -4,6 +4,9 @@ Defines the template method pattern for L5X data extraction.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BaseExtractor(ABC):
@@ -35,13 +38,13 @@ class BaseExtractor(ABC):
             Dictionary with extracted data
         """
         if self.debug:
-            print(f"\n[{self.__class__.__name__}] Processing routine: {routine_name}")
-        
+            logger.debug(f"[{self.__class__.__name__}] Processing routine: {routine_name}")
+
         # 1. Find items according to the extractor's specific pattern
         items = self.find_items(root, routine_name)
-        
+
         if self.debug:
-            print(f"[{self.__class__.__name__}] Items found: {len(items)}")
+            logger.debug(f"[{self.__class__.__name__}] Items found: {len(items)}")
         
         # 2. Validate the found items
         validated_items = self.validate_items(root, items)

@@ -4,6 +4,9 @@ Provides common search and element access functions.
 """
 import xml.etree.ElementTree as ET
 from typing import List, Optional
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class XMLNavigator:
@@ -16,15 +19,41 @@ class XMLNavigator:
     ROUTINES_PATH = './Controller/Programs/Program/Routines/Routine'
     TAGS_PATH = './Controller/Programs/Program/Tags/Tag'
     
-    def __init__(self, l5x_file_path: str):
+    def __init__(self, l5x_file_path: str = None, root: ET.Element = None):
         """
-        Initialize the navigator with an L5X file.
-        
+        Initialize the navigator with an L5X file or existing root element.
+
         Args:
-            l5x_file_path: Path to the L5X file
+            l5x_file_path: Path to the L5X file (optional if root provided)
+            root: Existing root element (optional if l5x_file_path provided)
+
+        Raises:
+            ValueError: If neither l5x_file_path nor root is provided
+            FileNotFoundError: If l5x_file_path doesn't exist
+            ET.ParseError: If XML parsing fails
         """
-        self.tree = ET.parse(l5x_file_path)
-        self.root = self.tree.getroot()
+        if l5x_file_path:
+            try:
+                self.tree = ET.parse(l5x_file_path)
+                self.root = self.tree.getroot()
+                logger.info(f"Successfully loaded L5X file: {l5x_file_path}")
+            except FileNotFoundError as e:
+                logger.error(f"L5X file not found: {l5x_file_path}")
+                raise FileNotFoundError(f"L5X file not found: {l5x_file_path}") from e
+            except ET.ParseError as e:
+                logger.error(f"Failed to parse XML file: {l5x_file_path} - {str(e)}")
+                raise ET.ParseError(f"Invalid XML format in {l5x_file_path}: {str(e)}") from e
+            except Exception as e:
+                logger.error(f"Unexpected error loading L5X file: {l5x_file_path} - {str(e)}")
+                raise RuntimeError(f"Failed to load L5X file: {str(e)}") from e
+        elif root is not None:
+            self.root = root
+            self.tree = None
+            logger.debug("Initialized XMLNavigator with existing root element")
+        else:
+            error_msg = "Either l5x_file_path or root must be provided"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def get_root(self):
         """Returns the XML tree root."""

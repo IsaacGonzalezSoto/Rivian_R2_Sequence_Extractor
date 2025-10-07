@@ -5,6 +5,9 @@ import re
 from typing import Dict, List, Any
 from collections import defaultdict
 from ..core.base_extractor import BaseExtractor
+from ..core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class TransitionExtractor(BaseExtractor):
@@ -25,25 +28,24 @@ class TransitionExtractor(BaseExtractor):
     def find_items(self, root, routine_name: str) -> List[Dict[str, Any]]:
         """
         Search for transition permissions in an EmStatesAndSequences routine.
-        
+
         Args:
             root: XML tree root
             routine_name: Routine name (e.g., 'EmStatesAndSequences_R2S')
-            
+
         Returns:
             List of dictionaries with transition permission information
         """
         from ..core.xml_navigator import XMLNavigator
-        
-        navigator = XMLNavigator.__new__(XMLNavigator)
-        navigator.root = root
+
+        navigator = XMLNavigator(root=root)
         
         # Search for the specific routine
         routine = navigator.find_routine_by_name(routine_name)
         
         if not routine:
             if self.debug:
-                print(f"  Warning: Routine not found: {routine_name}")
+                logger.warning(f"Routine not found: {routine_name}")
             return []
         
         # Get the regex pattern
@@ -69,7 +71,7 @@ class TransitionExtractor(BaseExtractor):
                 trans_name = region_match.group(2).strip()
                 transition_names[trans_idx] = trans_name
                 if self.debug:
-                    print(f"  Found transition name: State {trans_idx} - {trans_name}")
+                    logger.debug(f"Found transition name: State {trans_idx} - {trans_name}")
             
             # Search for all pattern matches (permissions)
             matches = re.finditer(pattern, line_text)
@@ -87,11 +89,11 @@ class TransitionExtractor(BaseExtractor):
                 }
                 
                 transitions[transition_idx].append(permission_data)
-                
+
                 if self.debug:
-                    print(f"  Transition[{transition_idx}].Permission[{permission_idx}] = {permission_value}")
+                    logger.debug(f"Transition[{transition_idx}].Permission[{permission_idx}] = {permission_value}")
                     if comment:
-                        print(f"    Comment: {comment}")
+                        logger.debug(f"  Comment: {comment}")
         
         # Convert to list format
         result = []

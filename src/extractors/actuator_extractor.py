@@ -4,6 +4,9 @@ Specialized extractor for actuators from MM routines.
 import re
 from typing import Dict, List, Any
 from ..core.base_extractor import BaseExtractor
+from ..core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ActuatorExtractor(BaseExtractor):
@@ -24,32 +27,31 @@ class ActuatorExtractor(BaseExtractor):
     def find_items(self, root, routine_name: str) -> List[Dict[str, Any]]:
         """
         Search for actuators in a specific MM routine.
-        
+
         Args:
             root: XML tree root
             routine_name: Routine name (e.g., 'Cm010507_MM4')
-            
+
         Returns:
             List of dictionaries with actuator information
         """
         from ..core.xml_navigator import XMLNavigator
-        
-        navigator = XMLNavigator.__new__(XMLNavigator)
-        navigator.root = root
+
+        navigator = XMLNavigator(root=root)
         
         # Search for the specific routine
         routine = navigator.find_routine_by_name(routine_name)
         
         if not routine:
             if self.debug:
-                print(f"  ⚠️  Routine not found: {routine_name}")
+                logger.warning(f"Routine not found: {routine_name}")
             return []
-        
+
         # Extract MM number from routine name
         mm_match = re.search(r'(MM\d+)', routine_name)
         if not mm_match:
             if self.debug:
-                print(f"  ⚠️  Could not extract MM number from: {routine_name}")
+                logger.warning(f"Could not extract MM number from: {routine_name}")
             return []
         
         mm_number = mm_match.group(1)
@@ -78,9 +80,9 @@ class ActuatorExtractor(BaseExtractor):
                         'description': description,
                         'mm_number': mm_number
                     })
-                    
+
                     if self.debug:
-                        print(f"      [{index}] {description}")
+                        logger.debug(f"    [{index}] {description}")
         
         # Sort by index
         actuators.sort(key=lambda x: x['index'])
@@ -91,18 +93,17 @@ class ActuatorExtractor(BaseExtractor):
         """
         Search for all actuators for a specific MM.
         Automatically finds the corresponding routine.
-        
+
         Args:
             root: XML tree root
             mm_number: MM number (e.g., 'MM4')
-            
+
         Returns:
             List of found actuators
         """
         from ..core.xml_navigator import XMLNavigator
-        
-        navigator = XMLNavigator.__new__(XMLNavigator)
-        navigator.root = root
+
+        navigator = XMLNavigator(root=root)
         
         # Pattern to find the correct routine (e.g., Cm010507_MM4)
         routine_pattern = f'_{mm_number}$|_{mm_number}_'
@@ -112,15 +113,15 @@ class ActuatorExtractor(BaseExtractor):
         
         if not matching_routines:
             if self.debug:
-                print(f"    ⚠️  No routine found for {mm_number}")
+                logger.warning(f"No routine found for {mm_number}")
             return []
-        
+
         # Use the first matching routine
         routine = matching_routines[0]
         routine_name = routine.get('Name', '')
-        
+
         if self.debug:
-            print(f"    → Found actuator routine: {routine_name}")
+            logger.debug(f"  Found actuator routine: {routine_name}")
         
         # Extract actuators
         return self.find_items(root, routine_name)

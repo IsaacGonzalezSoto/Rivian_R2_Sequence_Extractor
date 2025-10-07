@@ -1,0 +1,13 @@
+# R2_Sequence_Extractor Dependencies
+
+# Excel file generation
+openpyxl>=3.1.0
+
+# XML parsing (included in Python standard library, listed for documentation)
+# xml.etree.ElementTree (stdlib)
+
+# Development dependencies (optional)
+# pytest>=7.0.0  # For running unit tests
+# mypy>=1.0.0    # For static type checking
+# black>=23.0.0  # For code formatting
+# flake8>=6.0.0  # For code linting

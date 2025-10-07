@@ -4,6 +4,9 @@ Extracts tags with DataType='UDT_DigitalInputHal' from all programs.
 """
 from typing import List, Dict, Any
 from ..core.base_extractor import BaseExtractor
+from ..core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DigitalInputExtractor(BaseExtractor):
@@ -33,24 +36,24 @@ class DigitalInputExtractor(BaseExtractor):
             List of digital input tags with their information
         """
         digital_inputs = []
-        
+
         if self.debug:
-            print("\n[DigitalInputExtractor] Searching for UDT_DigitalInputHal tags...")
-        
+            logger.debug("[DigitalInputExtractor] Searching for UDT_DigitalInputHal tags...")
+
         # Find all programs in the controller
         programs = root.findall('.//Programs/Program')
-        
+
         if self.debug:
-            print(f"  Found {len(programs)} program(s) to search")
+            logger.debug(f"Found {len(programs)} program(s) to search")
         
         for program in programs:
             program_name = program.get('Name', 'Unknown')
             
             # Find all tags with DataType="UDT_DigitalInputHal"
             tags = program.findall('.//Tags/Tag[@DataType="UDT_DigitalInputHal"]')
-            
+
             if tags and self.debug:
-                print(f"  Program '{program_name}': {len(tags)} digital input tag(s)")
+                logger.debug(f"Program '{program_name}': {len(tags)} digital input tag(s)")
             
             for tag in tags:
                 tag_name = tag.get('Name', '')
@@ -72,12 +75,12 @@ class DigitalInputExtractor(BaseExtractor):
                 }
                 
                 digital_inputs.append(digital_input)
-                
+
                 if self.debug:
-                    print(f"    [{tag_name}] Parent: {parent_name}")
-        
+                    logger.debug(f"  [{tag_name}] Parent: {parent_name}")
+
         if self.debug:
-            print(f"  Total digital inputs found: {len(digital_inputs)}")
+            logger.debug(f"Total digital inputs found: {len(digital_inputs)}")
         
         return digital_inputs
     
@@ -123,7 +126,7 @@ class DigitalInputExtractor(BaseExtractor):
             
         except Exception as e:
             if self.debug:
-                print(f"    Warning: Could not extract parent name - {str(e)}")
+                logger.warning(f"Could not extract parent name - {str(e)}")
             return ''
     
     def find_items(self, root, routine_name: str) -> List[Dict[str, Any]]:

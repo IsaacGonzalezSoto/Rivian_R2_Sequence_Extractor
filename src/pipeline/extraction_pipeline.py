@@ -7,11 +7,24 @@ import re
 from typing import List, Dict, Any
 from collections import defaultdict
 from ..core.xml_navigator import XMLNavigator
+from ..core.logger import get_logger
+from ..core.constants import (
+    PATTERN_ACTION_ASSIGNMENT,
+    PATTERN_SEQUENCE_REGION,
+    PATTERN_SEQUENCE_NAME,
+    PATTERN_ACTION_NAME,
+    ROUTINE_PREFIX_SEQUENCES,
+    DEFAULT_OUTPUT_FOLDER,
+    EXCEL_FILE_PREFIX,
+    EXCEL_FILE_EXTENSION
+)
 from ..extractors.actuator_extractor import ActuatorExtractor
 from ..extractors.transition_extractor import TransitionExtractor
 from ..extractors.digital_input_extractor import DigitalInputExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
+
+logger = get_logger(__name__)
 
 
 class ExtractionPipeline:
@@ -34,8 +47,13 @@ class ExtractionPipeline:
         self.debug = debug
         
         # Create output folder if it doesn't exist
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        try:
+            if not os.path.exists(output_folder):
+                os.makedirs(output_folder)
+                logger.info(f"Created output folder: {output_folder}")
+        except OSError as e:
+            logger.error(f"Failed to create output folder: {output_folder} - {str(e)}")
+            raise RuntimeError(f"Cannot create output folder: {str(e)}") from e
         
         # Initialize XML navigator
         self.navigator = XMLNavigator(l5x_file_path)
@@ -50,23 +68,23 @@ class ExtractionPipeline:
     def run(self) -> List[Dict[str, Any]]:
         """
         Execute the complete extraction pipeline.
-        
+
         Returns:
             List of dictionaries with processed routine information
         """
         if self.debug:
-            print("="*60)
-            print("COMPLETE EXTRACTOR: SEQUENCES → ACTIONS → ACTUATORS")
-            print("="*60)
-        
+            logger.info("="*60)
+            logger.info("COMPLETE EXTRACTOR: SEQUENCES → ACTIONS → ACTUATORS")
+            logger.info("="*60)
+
         # Search for sequence routines
-        sequence_routines = self.navigator.find_routines_starting_with('EmStatesAndSequences')
-        
+        sequence_routines = self.navigator.find_routines_starting_with(ROUTINE_PREFIX_SEQUENCES)
+
         if self.debug:
-            print(f"\nSequence routines found: {len(sequence_routines)}")
+            logger.info(f"Sequence routines found: {len(sequence_routines)}")
             for routine in sequence_routines:
                 routine_name = routine.get('Name', 'Unknown')
-                print(f"  → Sequence routine: {routine_name}")
+                logger.info(f"  → Sequence routine: {routine_name}")
         
         # Process each routine
         all_routines_data = []
@@ -77,11 +95,11 @@ class ExtractionPipeline:
             all_routines_data.append(routine_data)
         
         # Final summary
-        print(f"\n{'='*60}")
-        print(f"✓ PROCESS COMPLETED")
-        print(f"{'='*60}")
-        print(f"Total routines processed: {len(all_routines_data)}")
-        print(f"Files generated in: {self.output_folder}/")
+        logger.info("="*60)
+        logger.info("✓ PROCESS COMPLETED")
+        logger.info("="*60)
+        logger.info(f"Total routines processed: {len(all_routines_data)}")
+        logger.info(f"Files generated in: {self.output_folder}/")
         
         return all_routines_data
     
@@ -95,9 +113,9 @@ class ExtractionPipeline:
         Returns:
             Dictionary with processing information
         """
-        print(f"\n{'='*60}")
-        print(f"✓ PROCESSING: {routine_name}")
-        print(f"{'='*60}")
+        logger.info("="*60)
+        logger.info(f"✓ PROCESSING: {routine_name}")
+        logger.info("="*60)
         
         # Extract actions and sequences with actuators
         sequences_data = self.extract_sequences_with_actuators(routine_name)
@@ -115,15 +133,18 @@ class ExtractionPipeline:
         digital_inputs_output = self.extract_digital_inputs()
         
         # Export to Excel (one file with multiple sheets)
-        excel_filename = f'complete_{routine_name}.xlsx'
+        excel_filename = f'{EXCEL_FILE_PREFIX}{routine_name}{EXCEL_FILE_EXTENSION}'
         excel_path = os.path.join(self.output_folder, excel_filename)
-        
-        self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, excel_path)
-        
-        print(f"\n✓ Excel file saved to: {excel_path}")
-        print(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
-        print(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
-        print(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
+
+        try:
+            self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, excel_path)
+            logger.info(f"✓ Excel file saved to: {excel_path}")
+            logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
+            logger.info(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
+            logger.info(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
+        except Exception as e:
+            logger.error(f"Failed to export Excel file: {excel_path} - {str(e)}")
+            raise RuntimeError(f"Excel export failed: {str(e)}") from e
         
         return {
             'routine_name': routine_name,
@@ -144,7 +165,7 @@ class ExtractionPipeline:
             Dictionary with transition data
         """
         if self.debug:
-            print(f"\n--- Extracting Transitions for {routine_name} ---")
+            logger.debug(f"Extracting Transitions for {routine_name}")
         
         # Extract transitions using the extractor
         transitions_data = self.transition_extractor.extract(
@@ -163,7 +184,7 @@ class ExtractionPipeline:
             Dictionary with digital input data
         """
         if self.debug:
-            print(f"\n--- Extracting Digital Inputs (UDT_DigitalInputHal) ---")
+            logger.debug("Extracting Digital Inputs (UDT_DigitalInputHal)")
         
         # Extract all digital inputs from the entire L5X
         digital_inputs = self.digital_input_extractor.extract_all_digital_inputs(
@@ -184,11 +205,11 @@ class ExtractionPipeline:
             List of sequences with all information
         """
         # Pattern to extract action assignments
-        pattern = r'EmSeqList\[(\d+)\]\.Step\[(\d+)\]\.ActionNumber\[(\d+)\]\s*:=\s*(\w+)\.outActionNum'
-        
+        pattern = PATTERN_ACTION_ASSIGNMENT
+
         # Patterns to extract sequence names
-        region_pattern = r'#region\s+Sequence\s+(\d+)\s+-\s+(.+)'
-        name_pattern = r"EmSeqList\[(\d+)\]\.Name\s*:=\s*'([^']+)'"
+        region_pattern = PATTERN_SEQUENCE_REGION
+        name_pattern = PATTERN_SEQUENCE_NAME
         
         # Structure to store results
         sequences = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
@@ -212,7 +233,7 @@ class ExtractionPipeline:
                 seq_name = region_match.group(2).strip()
                 sequence_names[seq_idx] = seq_name
                 if self.debug:
-                    print(f"  Found sequence name from #region: Sequence {seq_idx} - {seq_name}")
+                    logger.debug(f"Found sequence name from #region: Sequence {seq_idx} - {seq_name}")
             
             # If not found in #region, check hardcoded Name
             if not region_match:
@@ -224,7 +245,7 @@ class ExtractionPipeline:
                     if seq_idx not in sequence_names:
                         sequence_names[seq_idx] = seq_name
                         if self.debug:
-                            print(f"  Found sequence name from hardcoded: Sequence {seq_idx} - {seq_name}")
+                            logger.debug(f"Found sequence name from hardcoded: Sequence {seq_idx} - {seq_name}")
             
             # Search for action assignments
             matches = re.finditer(pattern, line_text)
@@ -243,10 +264,10 @@ class ExtractionPipeline:
                     state = action_info['state']
                     
                     if self.debug:
-                        print(f"\n  Action found: {action_name}")
-                        print(f"    MM: {mm_number}, State: {state}")
-                        print(f"    Sequence[{seq_idx}].Step[{step_idx}].ActionNumber[{action_idx}]")
-                        print(f"    Searching for actuators...")
+                        logger.debug(f"Action found: {action_name}")
+                        logger.debug(f"  MM: {mm_number}, State: {state}")
+                        logger.debug(f"  Sequence[{seq_idx}].Step[{step_idx}].ActionNumber[{action_idx}]")
+                        logger.debug(f"  Searching for actuators...")
                     
                     # Extract actuators
                     actuators = self.actuator_extractor.find_actuators_for_mm(
@@ -272,7 +293,7 @@ class ExtractionPipeline:
                 else:
                     # Action that doesn't follow the pattern
                     if self.debug:
-                        print(f"\n  Action without MM pattern: {action_name}")
+                        logger.debug(f"Action without MM pattern: {action_name}")
                     
                     sequences[seq_idx][step_idx][action_idx] = {
                         'action_name': action_name,
@@ -285,243 +306,58 @@ class ExtractionPipeline:
         
         # Convert to list structured format and add sequence names
         return self.format_sequences(sequences, sequence_names)
-    
-    def parse_action_name(self, action_name: str) -> Dict[str, str]:
-        """
-        Parse an action name to extract MM and state.
-        
-        Args:
-            action_name: Action name (e.g., 'ActionMM4Work')
-            
-        Returns:
-            Dictionary with mm_number and state
-        """
-        pattern = r'Action(MM\d+)(\w+)'
-        match = re.match(pattern, action_name)
-        
-        if match:
-            return {
-                'mm_number': match.group(1),
-                'state': match.group(2)
-            }
-        return None
-    
-    def format_sequences(self, sequences: Dict, sequence_names: Dict[int, str] = None) -> List[Dict[str, Any]]:
-        """
-        Format sequences for structured output.
-        
-        Args:
-            sequences: Nested dictionary with sequences
-            sequence_names: Optional dictionary mapping sequence_index to descriptive_name
-            
-        Returns:
-            List of formatted sequences
-        """
-        if sequence_names is None:
-            sequence_names = {}
-        
-        formatted = []
-        
-        for seq_idx in sorted(sequences.keys()):
-            sequence = {
-                'sequence_index': seq_idx,
-                'sequence_name': sequence_names.get(seq_idx, None),  # New field
-                'steps': []
-            }
-            
-            for step_idx in sorted(sequences[seq_idx].keys()):
-                step = {
-                    'step_index': step_idx,
-                    'actions': []
-                }
-                
-                for action_idx in sorted(sequences[seq_idx][step_idx].keys()):
-                    action_data = sequences[seq_idx][step_idx][action_idx]
-                    
-                    action = {
-                        'action_index': action_idx,
-                        'action_name': action_data['action_name'],
-                        'mm_number': action_data['mm_number'],
-                        'state': action_data['state'],
-                        'actuator_count': len(action_data['actuators']),
-                        'actuators': action_data['actuators']
-                    }
-                    
-                    if action_data['validation']:
-                        action['validation'] = action_data['validation']
-                    
-                    step['actions'].append(action)
-                
-                sequence['steps'].append(step)
-            
-            formatted.append(sequence)
-        
-        return formatted
-    
-    def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
-        """
-        Extract sequences with their associated actions and actuators.
-        
-        Args:
-            routine_name: Name of the sequence routine
-            
-        Returns:
-            List of sequences with complete information
-        """
-        # Pattern to extract action assignments
-        pattern = r'EmSeqList\[(\d+)\]\.Step\[(\d+)\]\.ActionNumber\[(\d+)\]\s*:=\s*(\w+)\.outActionNum'
-        
-        # Patterns to extract sequence names
-        region_pattern = r'#region\s+Sequence\s+(\d+)\s+-\s+(.+)'
-        name_pattern = r"EmSeqList\[(\d+)\]\.Name\s*:=\s*'([^']+)'"
-        
-        # Structure to store results
-        sequences = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-        sequence_names = {}  # Map sequence_index -> descriptive_name
-        
-        # Get routine
-        routine = self.navigator.find_routine_by_name(routine_name)
-        if not routine:
-            return []
-        
-        # Process routine lines
-        lines = self.navigator.get_routine_lines(routine)
-        
-        for line in lines:
-            line_text = line.text if line.text else ''
-            
-            # Extract sequence names from #region comments
-            region_match = re.search(region_pattern, line_text)
-            if region_match:
-                seq_idx = int(region_match.group(1))
-                seq_name = region_match.group(2).strip()
-                sequence_names[seq_idx] = seq_name
-                if self.debug:
-                    print(f"  Found sequence: [{seq_idx}] {seq_name}")
-            
-            # Extract sequence names from hardcoded assignments
-            if not region_match:
-                name_match = re.search(name_pattern, line_text)
-                if name_match:
-                    seq_idx = int(name_match.group(1))
-                    seq_name = name_match.group(2).strip()
-                    if seq_idx not in sequence_names:
-                        sequence_names[seq_idx] = seq_name
-                        if self.debug:
-                            print(f"  Found sequence: [{seq_idx}] {seq_name}")
-            
-            # Search for action assignments
-            matches = re.finditer(pattern, line_text)
-            
-            for match in matches:
-                seq_idx = int(match.group(1))
-                step_idx = int(match.group(2))
-                action_idx = int(match.group(3))
-                action_name = match.group(4)
-                
-                # Parse action name
-                action_info = self.parse_action_name(action_name)
-                
-                if action_info:
-                    mm_number = action_info['mm_number']
-                    state = action_info['state']
-                    
-                    if self.debug:
-                        print(f"\n  Action: {action_name}")
-                        print(f"    MM: {mm_number}, State: {state}")
-                        print(f"    Seq[{seq_idx}].Step[{step_idx}].Action[{action_idx}]")
-                        print(f"    Extracting actuators...")
-                    
-                    # Extract actuators
-                    actuators = self.actuator_extractor.find_actuators_for_mm(
-                        self.navigator.get_root(), 
-                        mm_number
-                    )
-                    
-                    # Validate actuators
-                    validation = self.validator.validate_actuators(
-                        self.navigator.get_root(),
-                        mm_number,
-                        actuators
-                    )
-                    
-                    sequences[seq_idx][step_idx][action_idx] = {
-                        'action_name': action_name,
-                        'mm_number': mm_number,
-                        'state': state,
-                        'actuators': actuators,
-                        'validation': validation,
-                        'full_assignment': match.group(0)
-                    }
-                else:
-                    # Action without MM pattern
-                    if self.debug:
-                        print(f"\n  Action (no MM pattern): {action_name}")
-                    
-                    sequences[seq_idx][step_idx][action_idx] = {
-                        'action_name': action_name,
-                        'mm_number': None,
-                        'state': None,
-                        'actuators': [],
-                        'validation': None,
-                        'full_assignment': match.group(0)
-                    }
-        
-        # Convert to structured list format
-        return self.format_sequences(sequences, sequence_names)
-    
+
     def parse_action_name(self, action_name: str) -> Dict[str, str]:
         """
         Parse an action name to extract MM number and state.
-        
+
         Args:
             action_name: Action name (e.g., 'ActionMM4Work')
-            
+
         Returns:
             Dictionary with mm_number and state, or None if pattern doesn't match
         """
-        pattern = r'Action(MM\d+)(\w+)'
-        match = re.match(pattern, action_name)
-        
+        match = re.match(PATTERN_ACTION_NAME, action_name)
+
         if match:
             return {
                 'mm_number': match.group(1),
                 'state': match.group(2)
             }
         return None
-    
+
     def format_sequences(self, sequences: Dict, sequence_names: Dict[int, str] = None) -> List[Dict[str, Any]]:
         """
         Format sequences into structured output.
-        
+
         Args:
             sequences: Nested dictionary with sequence data
             sequence_names: Optional dictionary mapping sequence_index to descriptive_name
-            
+
         Returns:
             List of formatted sequences
         """
         if sequence_names is None:
             sequence_names = {}
-        
+
         formatted = []
-        
+
         for seq_idx in sorted(sequences.keys()):
             sequence = {
                 'sequence_index': seq_idx,
                 'sequence_name': sequence_names.get(seq_idx, None),
                 'steps': []
             }
-            
+
             for step_idx in sorted(sequences[seq_idx].keys()):
                 step = {
                     'step_index': step_idx,
                     'actions': []
                 }
-                
+
                 for action_idx in sorted(sequences[seq_idx][step_idx].keys()):
                     action_data = sequences[seq_idx][step_idx][action_idx]
-                    
+
                     action = {
                         'action_index': action_idx,
                         'action_name': action_data['action_name'],
@@ -530,14 +366,14 @@ class ExtractionPipeline:
                         'actuator_count': len(action_data['actuators']),
                         'actuators': action_data['actuators']
                     }
-                    
+
                     if action_data['validation']:
                         action['validation'] = action_data['validation']
-                    
+
                     step['actions'].append(action)
-                
+
                 sequence['steps'].append(step)
-            
+
             formatted.append(sequence)
-        
+
         return formatted

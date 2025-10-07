@@ -5,6 +5,7 @@ Uses openpyxl to create .xlsx files with multiple sheets.
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from typing import Dict, Any, List
+from ..core.constants import ExcelColors, ExcelFontSizes, MAX_COLUMN_WIDTH, DEFAULT_COLUMN_PADDING
 
 
 class ExcelExporter:
@@ -16,22 +17,22 @@ class ExcelExporter:
     def __init__(self):
         """Initialize the Excel exporter."""
         # Header styles
-        self.header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        self.header_font = Font(bold=True, color="FFFFFF")
+        self.header_fill = PatternFill(start_color=ExcelColors.HEADER_FILL, end_color=ExcelColors.HEADER_FILL, fill_type="solid")
+        self.header_font = Font(bold=True, color=ExcelColors.HEADER_FONT)
         self.header_alignment = Alignment(horizontal="center", vertical="center")
-        
+
         # Styles for Complete_Flow sheet
-        self.transition_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-        self.transition_font = Font(bold=True, color="FFFFFF", size=12)
-        self.sequence_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
-        self.sequence_font = Font(bold=True, color="FFFFFF", size=11)
-        self.step_fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")
-        self.step_font = Font(bold=True, color="000000", size=10)
-        self.action_fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        self.action_font = Font(bold=True, size=10)
-        
+        self.transition_fill = PatternFill(start_color=ExcelColors.TRANSITION_FILL, end_color=ExcelColors.TRANSITION_FILL, fill_type="solid")
+        self.transition_font = Font(bold=True, color=ExcelColors.TRANSITION_FONT, size=ExcelFontSizes.TRANSITION)
+        self.sequence_fill = PatternFill(start_color=ExcelColors.SEQUENCE_FILL, end_color=ExcelColors.SEQUENCE_FILL, fill_type="solid")
+        self.sequence_font = Font(bold=True, color=ExcelColors.SEQUENCE_FONT, size=ExcelFontSizes.SEQUENCE)
+        self.step_fill = PatternFill(start_color=ExcelColors.STEP_FILL, end_color=ExcelColors.STEP_FILL, fill_type="solid")
+        self.step_font = Font(bold=True, color=ExcelColors.STEP_FONT, size=ExcelFontSizes.STEP)
+        self.action_fill = PatternFill(start_color=ExcelColors.ACTION_FILL, end_color=ExcelColors.ACTION_FILL, fill_type="solid")
+        self.action_font = Font(bold=True, size=ExcelFontSizes.ACTION)
+
         # Data cell background - soft beige for eye comfort
-        self.data_fill = PatternFill(start_color="F5F5DC", end_color="F5F5DC", fill_type="solid")
+        self.data_fill = PatternFill(start_color=ExcelColors.DATA_FILL, end_color=ExcelColors.DATA_FILL, fill_type="solid")
     
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], output_path: str):
         """
@@ -289,7 +290,7 @@ class ExcelExporter:
                 except:
                     pass
             
-            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+            adjusted_width = min(max_length + DEFAULT_COLUMN_PADDING, MAX_COLUMN_WIDTH)
             ws.column_dimensions[column_letter].width = adjusted_width
     
     def _create_complete_flow_sheet(self, wb: Workbook, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any]):

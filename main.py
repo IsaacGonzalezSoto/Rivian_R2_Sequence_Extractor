@@ -8,6 +8,10 @@ import time
 from pathlib import Path
 from typing import List, Tuple
 from src.pipeline.extraction_pipeline import ExtractionPipeline
+from src.core.logger import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)
 
 
 def find_l5x_files() -> List[Path]:
@@ -147,6 +151,7 @@ def process_file(l5x_file: Path, output_base: str = "output", debug: bool = True
         
     except Exception as e:
         elapsed_time = time.time() - start_time
+        logger.error(f"Error processing file: {str(e)}", exc_info=True)
         print(f"      Error: {str(e)}")
         return False, output_folder, elapsed_time
 
