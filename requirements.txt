@@ -3,6 +3,10 @@
 # Excel file generation
 openpyxl>=3.1.0
 
+# CLI and terminal UI
+typer>=0.9.0
+rich>=13.0.0
+
 # XML parsing (included in Python standard library, listed for documentation)
 # xml.etree.ElementTree (stdlib)
 
