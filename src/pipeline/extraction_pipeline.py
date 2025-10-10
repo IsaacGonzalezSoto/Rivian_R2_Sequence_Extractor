@@ -36,7 +36,7 @@ class ExtractionPipeline:
     def __init__(self, l5x_file_path: str, output_folder: str = 'output', debug: bool = True):
         """
         Initialize the extraction pipeline.
-        
+
         Args:
             l5x_file_path: Path to the L5X file
             output_folder: Folder to save Excel results
@@ -45,7 +45,10 @@ class ExtractionPipeline:
         self.l5x_file_path = l5x_file_path
         self.output_folder = output_folder
         self.debug = debug
-        
+
+        # Extract fixture name from L5X filename
+        self.fixture_name = self._extract_fixture_name(l5x_file_path)
+
         # Create output folder if it doesn't exist
         try:
             if not os.path.exists(output_folder):
@@ -54,17 +57,44 @@ class ExtractionPipeline:
         except OSError as e:
             logger.error(f"Failed to create output folder: {output_folder} - {str(e)}")
             raise RuntimeError(f"Cannot create output folder: {str(e)}") from e
-        
+
         # Initialize XML navigator
         self.navigator = XMLNavigator(l5x_file_path)
-        
+
         # Initialize components
         self.actuator_extractor = ActuatorExtractor(debug=debug)
         self.transition_extractor = TransitionExtractor(debug=debug)
         self.digital_input_extractor = DigitalInputExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
-    
+
+    def _extract_fixture_name(self, l5x_file_path: str) -> str:
+        """
+        Extract fixture name from L5X filename.
+
+        Args:
+            l5x_file_path: Path to the L5X file
+
+        Returns:
+            Fixture name (e.g., '010UA1') or 'complete' if pattern doesn't match
+        """
+        import os
+        filename = os.path.basename(l5x_file_path)
+
+        # Try to match pattern like: _010UA1_Fixture_...
+        # Pattern: _([A-Z0-9]+)_Fixture
+        match = re.search(r'_([A-Z0-9]+)_Fixture', filename, re.IGNORECASE)
+        if match:
+            fixture_name = match.group(1)
+            if self.debug:
+                logger.debug(f"Extracted fixture name: {fixture_name} from {filename}")
+            return fixture_name
+
+        # Fallback: use default prefix
+        if self.debug:
+            logger.debug(f"Could not extract fixture name from {filename}, using default prefix")
+        return EXCEL_FILE_PREFIX.rstrip('_')
+
     def run(self) -> List[Dict[str, Any]]:
         """
         Execute the complete extraction pipeline.
@@ -131,9 +161,10 @@ class ExtractionPipeline:
         
         # Extract digital inputs (independent from sequences/transitions)
         digital_inputs_output = self.extract_digital_inputs()
-        
+
         # Export to Excel (one file with multiple sheets)
-        excel_filename = f'{EXCEL_FILE_PREFIX}{routine_name}{EXCEL_FILE_EXTENSION}'
+        # Use fixture name instead of generic prefix
+        excel_filename = f'{self.fixture_name}_{routine_name}{EXCEL_FILE_EXTENSION}'
         excel_path = os.path.join(self.output_folder, excel_filename)
 
         try:
