@@ -131,6 +131,47 @@ All UDT_DigitalInputHal tags with:
 - Tag Name
 - Full Path
 
+## Building Standalone Executable
+
+You can create a standalone Windows executable (.exe) that doesn't require Python installation.
+
+### Prerequisites
+
+- Python 3.7+
+- PyInstaller (will be installed automatically by the build script)
+
+### Build Steps
+
+1. Run the build script:
+```bash
+build_exe.bat
+```
+
+The script will:
+- Check Python installation
+- Install/verify PyInstaller
+- Install all required dependencies
+- Build the executable using PyInstaller
+- Place the result in `dist/R2_Sequence_Extractor.exe`
+
+### Using the Executable
+
+Once built, the `.exe` file is completely standalone:
+1. Copy `R2_Sequence_Extractor.exe` to any Windows PC
+2. Place your L5X files in the same folder
+3. Double-click the `.exe` to run
+4. No Python installation required on the target machine
+
+### Manual Build
+
+If you prefer to build manually:
+```bash
+pip install pyinstaller
+pyinstaller main.spec
+```
+
+The executable will be in `dist/R2_Sequence_Extractor.exe`.
+
 ## Development
 
 ### Adding New Extractors
@@ -144,7 +185,7 @@ All UDT_DigitalInputHal tags with:
 
 ### Logging
 
-Centralized logging is configured in [src/utils/logger.py](src/utils/logger.py). Logs are written to `app.log`.
+Centralized logging is configured in [src/core/logger.py](src/core/logger.py). Logs are written to `app.log`.
 
 ## Recent Changes
 

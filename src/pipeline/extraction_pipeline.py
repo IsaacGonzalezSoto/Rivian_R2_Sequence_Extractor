@@ -72,28 +72,38 @@ class ExtractionPipeline:
         """
         Extract fixture name from L5X filename.
 
+        Examples:
+            _010_UA1_Em0106_Program.L5X -> 010_UA1_Em0106
+            _010UA1_Fixture_Em0105.L5X -> 010UA1_Fixture_Em0105
+            MyFixture_Program.L5X -> MyFixture
+
         Args:
             l5x_file_path: Path to the L5X file
 
         Returns:
-            Fixture name (e.g., '010UA1') or 'complete' if pattern doesn't match
+            Fixture name extracted from filename
         """
         import os
         filename = os.path.basename(l5x_file_path)
 
-        # Try to match pattern like: _010UA1_Fixture_...
-        # Pattern: _([A-Z0-9]+)_Fixture
-        match = re.search(r'_([A-Z0-9]+)_Fixture', filename, re.IGNORECASE)
-        if match:
-            fixture_name = match.group(1)
-            if self.debug:
-                logger.debug(f"Extracted fixture name: {fixture_name} from {filename}")
-            return fixture_name
+        # Remove .L5X extension (case insensitive)
+        base_name = re.sub(r'\.L5X$', '', filename, flags=re.IGNORECASE)
 
-        # Fallback: use default prefix
+        # Remove common suffixes like _Program, _Fixture, etc.
+        base_name = re.sub(r'_Program$', '', base_name, flags=re.IGNORECASE)
+
+        # Remove leading underscore if present
+        if base_name.startswith('_'):
+            base_name = base_name[1:]
+
+        # If we got an empty string somehow, use fallback
+        if not base_name:
+            base_name = EXCEL_FILE_PREFIX.rstrip('_')
+
         if self.debug:
-            logger.debug(f"Could not extract fixture name from {filename}, using default prefix")
-        return EXCEL_FILE_PREFIX.rstrip('_')
+            logger.debug(f"Extracted fixture name: {base_name} from {filename}")
+
+        return base_name
 
     def run(self) -> List[Dict[str, Any]]:
         """
