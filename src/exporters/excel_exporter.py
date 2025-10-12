@@ -34,36 +34,41 @@ class ExcelExporter:
         # Data cell background - soft beige for eye comfort
         self.data_fill = PatternFill(start_color=ExcelColors.DATA_FILL, end_color=ExcelColors.DATA_FILL, fill_type="solid")
     
-    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], output_path: str):
+    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], output_path: str):
         """
-        Export sequences, transitions, and digital inputs to a single Excel file with multiple sheets.
-        
+        Export sequences, transitions, digital inputs, and actuator groups to a single Excel file with multiple sheets.
+
         Args:
             sequences_data: Dictionary with sequence and actuator data
             transitions_data: Dictionary with transition permission data
             digital_inputs_data: Dictionary with digital input tags data
+            actuator_groups_data: Dictionary with actuator group tags data
             output_path: Path for the output Excel file
         """
         wb = Workbook()
-        
+
         # Remove default sheet
         if 'Sheet' in wb.sheetnames:
             wb.remove(wb['Sheet'])
-        
+
         # Create Complete_Flow sheet (new main view)
         self._create_complete_flow_sheet(wb, sequences_data, transitions_data)
-        
+
         # Create sequences sheet
         self._create_sequences_sheet(wb, sequences_data)
-        
+
         # Create transitions sheet if there's data
         if transitions_data and transitions_data.get('transitions'):
             self._create_transitions_sheet(wb, transitions_data)
-        
+
         # Create digital inputs sheet if there's data
         if digital_inputs_data and digital_inputs_data.get('digital_inputs'):
             self._create_digital_inputs_sheet(wb, digital_inputs_data)
-        
+
+        # Create actuator groups sheet if there's data
+        if actuator_groups_data and actuator_groups_data.get('actuator_groups'):
+            self._create_actuator_groups_sheet(wb, actuator_groups_data)
+
         # Save workbook
         wb.save(output_path)
     
@@ -220,7 +225,49 @@ class ExcelExporter:
         
         # Auto-adjust column widths
         self._adjust_column_widths(ws)
-    
+
+    def _create_actuator_groups_sheet(self, wb: Workbook, data: Dict[str, Any]):
+        """
+        Create the Actuator Groups sheet.
+
+        Args:
+            wb: Workbook object
+            data: Actuator groups data
+        """
+        ws = wb.create_sheet("Actuator Groups")
+
+        # Headers
+        headers = [
+            'Program',
+            'Tag Name',
+            'Description'
+        ]
+
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.fill = self.header_fill
+            cell.font = self.header_font
+            cell.alignment = self.header_alignment
+
+        # Write data
+        row_num = 2
+
+        for actuator_group in data['actuator_groups']:
+            row_data = [
+                actuator_group['program'],
+                actuator_group['tag_name'],
+                actuator_group['description']
+            ]
+
+            for col_num, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=value)
+                cell.fill = self.data_fill  # Apply beige background
+            row_num += 1
+
+        # Auto-adjust column widths
+        self._adjust_column_widths(ws)
+
     def _create_transitions_sheet(self, wb: Workbook, data: Dict[str, Any]):
         """
         Create the Transitions sheet.

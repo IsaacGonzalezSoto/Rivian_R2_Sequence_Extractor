@@ -22,6 +22,7 @@ from ..extractors.actuator_extractor import ActuatorExtractor
 from ..extractors.transition_extractor import TransitionExtractor
 from ..extractors.digital_input_extractor import DigitalInputExtractor
 from ..extractors.part_sensor_extractor import PartSensorExtractor
+from ..extractors.actuator_group_extractor import ActuatorGroupExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
 
@@ -67,6 +68,7 @@ class ExtractionPipeline:
         self.transition_extractor = TransitionExtractor(debug=debug)
         self.digital_input_extractor = DigitalInputExtractor(debug=debug)
         self.part_sensor_extractor = PartSensorExtractor(debug=debug)
+        self.actuator_group_extractor = ActuatorGroupExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
 
@@ -170,9 +172,12 @@ class ExtractionPipeline:
         
         # Extract transitions
         transitions_output = self.extract_transitions(routine_name)
-        
+
         # Extract digital inputs (independent from sequences/transitions)
         digital_inputs_output = self.extract_digital_inputs()
+
+        # Extract actuator groups (independent from sequences/transitions)
+        actuator_groups_output = self.extract_actuator_groups()
 
         # Export to Excel (one file with multiple sheets)
         # Use fixture name instead of generic prefix
@@ -180,21 +185,23 @@ class ExtractionPipeline:
         excel_path = os.path.join(self.output_folder, excel_filename)
 
         try:
-            self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, excel_path)
+            self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, actuator_groups_output, excel_path)
             logger.info(f"✓ Excel file saved to: {excel_path}")
             logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
             logger.info(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
             logger.info(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
+            logger.info(f"  - Sheet 4: Actuator Groups ({actuator_groups_output.get('group_count', 0)} groups)")
         except Exception as e:
             logger.error(f"Failed to export Excel file: {excel_path} - {str(e)}")
             raise RuntimeError(f"Excel export failed: {str(e)}") from e
-        
+
         return {
             'routine_name': routine_name,
             'excel_file': excel_path,
             'sequences_count': len(sequences_data),
             'transitions_count': transitions_output.get('transition_count', 0),
-            'digital_inputs_count': digital_inputs_output.get('input_count', 0)
+            'digital_inputs_count': digital_inputs_output.get('input_count', 0),
+            'actuator_groups_count': actuator_groups_output.get('group_count', 0)
         }
     
     def extract_transitions(self, routine_name: str) -> Dict[str, Any]:
@@ -250,6 +257,25 @@ class ExtractionPipeline:
 
         # Format output
         return self.digital_input_extractor.format_output(digital_inputs)
+
+    def extract_actuator_groups(self) -> Dict[str, Any]:
+        """
+        Extract actuator group tags from all programs.
+        This is independent from sequences and transitions.
+
+        Returns:
+            Dictionary with actuator group data
+        """
+        if self.debug:
+            logger.debug("Extracting Actuator Groups (AOI_Actuator)")
+
+        # Extract all actuator groups from the entire L5X
+        actuator_groups = self.actuator_group_extractor.extract_all_actuator_groups(
+            self.navigator.get_root()
+        )
+
+        # Format output
+        return self.actuator_group_extractor.format_output(actuator_groups)
     
     def extract_sequences_with_actuators(self, routine_name: str) -> List[Dict[str, Any]]:
         """

@@ -33,6 +33,7 @@ The application runs interactively:
 
 **src/extractors/**
 - **actuator_extractor.py**: Finds actuator descriptions from MM routines by parsing MOVE statements: `MOVE('DESCRIPTION', MM{X}Cyls[INDEX].Stg.Name)`
+- **actuator_group_extractor.py**: Extracts actuator group tags (AOI_Actuator) with tag names (MM1, MM2, etc.) and descriptions ("Group1 Clamps", "Group 4 Pins")
 - **transition_extractor.py**: Extracts transition permissions from `EmTransitionStates[X].AutoStartPerms.Y` assignments
 - **digital_input_extractor.py**: Extracts all UDT_DigitalInputHal tags across the entire L5X file
 - **part_sensor_extractor.py**: Maps digital input sensors to part present detection routines (`Cm{digits}_Part{X}`)
@@ -54,6 +55,7 @@ The application runs interactively:
    - TransitionExtractor processes transition permissions from the same routine
    - DigitalInputExtractor scans entire L5X for UDT_DigitalInputHal tags
    - PartSensorExtractor identifies Part routines and maps sensors to parts using pattern: `XIC(SENSOR.Out.Value) OTE(Part{X}.inpSensors.Y)`
+   - ActuatorGroupExtractor scans entire L5X for AOI_Actuator tags (MM groups)
 4. ArrayValidator checks actuator index continuity
 5. ExcelExporter creates multi-sheet workbook with filename: `{fixture_name}_{routine_name}.xlsx`
 
@@ -81,6 +83,7 @@ Generated Excel files in `output/{L5X_filename}/`:
   - Sequences_Actuators: Detailed sequences with actuators
   - Transitions: Transition permissions table
   - Digital_Inputs: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
+  - Actuator_Groups: All AOI_Actuator tags (MM groups) with Program/Tag Name/Description (e.g., 'MM1' - 'Group1 Clamps', 'MM4' - 'Group 4 Pins')
 
 **Note**: The fixture name is automatically extracted from the L5X filename. For files like `_010UA1_Fixture_Em0105_Program.L5X`, the output will be `010UA1_EmStatesAndSequences_R2.xlsx` instead of the old format `complete_EmStatesAndSequences_R2.xlsx`.
 
