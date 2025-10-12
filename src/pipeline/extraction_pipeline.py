@@ -21,6 +21,7 @@ from ..core.constants import (
 from ..extractors.actuator_extractor import ActuatorExtractor
 from ..extractors.transition_extractor import TransitionExtractor
 from ..extractors.digital_input_extractor import DigitalInputExtractor
+from ..extractors.part_sensor_extractor import PartSensorExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
 
@@ -65,6 +66,7 @@ class ExtractionPipeline:
         self.actuator_extractor = ActuatorExtractor(debug=debug)
         self.transition_extractor = TransitionExtractor(debug=debug)
         self.digital_input_extractor = DigitalInputExtractor(debug=debug)
+        self.part_sensor_extractor = PartSensorExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
 
@@ -218,20 +220,34 @@ class ExtractionPipeline:
     
     def extract_digital_inputs(self) -> Dict[str, Any]:
         """
-        Extract digital input tags from all programs.
+        Extract digital input tags from all programs and map them to parts.
         This is independent from sequences and transitions.
-        
+
         Returns:
             Dictionary with digital input data
         """
         if self.debug:
             logger.debug("Extracting Digital Inputs (UDT_DigitalInputHal)")
-        
+
         # Extract all digital inputs from the entire L5X
         digital_inputs = self.digital_input_extractor.extract_all_digital_inputs(
             self.navigator.get_root()
         )
-        
+
+        # Extract sensor-to-part mappings
+        if self.debug:
+            logger.debug("Extracting Part-Sensor relationships")
+
+        sensor_to_parts = self.part_sensor_extractor.extract_all_part_sensors(
+            self.navigator.get_root()
+        )
+
+        # Update digital inputs with part assignments
+        digital_inputs = self.digital_input_extractor.update_part_assignments(
+            digital_inputs,
+            sensor_to_parts
+        )
+
         # Format output
         return self.digital_input_extractor.format_output(digital_inputs)
     

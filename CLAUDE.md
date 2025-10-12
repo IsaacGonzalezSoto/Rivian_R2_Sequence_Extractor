@@ -35,6 +35,7 @@ The application runs interactively:
 - **actuator_extractor.py**: Finds actuator descriptions from MM routines by parsing MOVE statements: `MOVE('DESCRIPTION', MM{X}Cyls[INDEX].Stg.Name)`
 - **transition_extractor.py**: Extracts transition permissions from `EmTransitionStates[X].AutoStartPerms.Y` assignments
 - **digital_input_extractor.py**: Extracts all UDT_DigitalInputHal tags across the entire L5X file
+- **part_sensor_extractor.py**: Maps digital input sensors to part present detection routines (`Cm{digits}_Part{X}`)
 
 **src/validators/**
 - **array_validator.py**: Validates actuator arrays to ensure no missing indices
@@ -52,6 +53,7 @@ The application runs interactively:
    - For each ActionMM{X} found, ActuatorExtractor finds corresponding MM routine and extracts actuators
    - TransitionExtractor processes transition permissions from the same routine
    - DigitalInputExtractor scans entire L5X for UDT_DigitalInputHal tags
+   - PartSensorExtractor identifies Part routines and maps sensors to parts using pattern: `XIC(SENSOR.Out.Value) OTE(Part{X}.inpSensors.Y)`
 4. ArrayValidator checks actuator index continuity
 5. ExcelExporter creates multi-sheet workbook with filename: `{fixture_name}_{routine_name}.xlsx`
 
@@ -67,6 +69,10 @@ The application runs interactively:
 
 **Fixture Name Extraction**: Fixture name extracted from L5X filename using pattern `_([A-Z0-9]+)_Fixture` (e.g., `_010UA1_Fixture_Em0105_Program.L5X` → `010UA1`). Falls back to `complete` if pattern not found.
 
+**Part Present Detection**: Part routines follow pattern `Cm{digits}_Part{X}` where X is the part number. Sensors are mapped to parts using ladder logic: `XIC(SENSOR_NAME.Out.Value) OTE(Part{X}.inpSensors.Y)`. The system validates that the number of Part routines matches the number of `AOI_Part` tags.
+
+**Known Limitations**: The Part-Sensor extractor expects the simple pattern `XIC(SENSOR.Out.Value) OTE(PartX.inpSensors.Y)` with minimal spacing. If there is complex conditional logic between the XIC and OTE (e.g., `XIC(SENSOR.Out.Value) ,XIC(MM5.stsAtWork) XIO(Spare.Off) ] OTE(PartX.inpSensors.Y)`), the sensor may not be detected. This affects approximately 11% of test cases (1 out of 9 tested files). Example: `_040_UA1_Em0202_Program.L5X` Part3 and Part4.
+
 ## Output Structure
 
 Generated Excel files in `output/{L5X_filename}/`:
@@ -74,7 +80,7 @@ Generated Excel files in `output/{L5X_filename}/`:
   - Complete_Flow: Integrated view of sequences and transitions
   - Sequences_Actuators: Detailed sequences with actuators
   - Transitions: Transition permissions table
-  - Digital_Inputs: All UDT_DigitalInputHal tags with Program/Tag names
+  - Digital_Inputs: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
 
 **Note**: The fixture name is automatically extracted from the L5X filename. For files like `_010UA1_Fixture_Em0105_Program.L5X`, the output will be `010UA1_EmStatesAndSequences_R2.xlsx` instead of the old format `complete_EmStatesAndSequences_R2.xlsx`.
 

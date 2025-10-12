@@ -190,7 +190,8 @@ class ExcelExporter:
             'Program',
             'Tag Name',
             'Description',
-            'Parent Name'
+            'Parent Name',
+            'Part Assignment'
         ]
         
         # Write headers
@@ -208,7 +209,8 @@ class ExcelExporter:
                 digital_input['program'],
                 digital_input['tag_name'],
                 digital_input['description'],
-                digital_input['parent_name']
+                digital_input['parent_name'],
+                digital_input.get('part_assignment', 'N/A')
             ]
             
             for col_num, value in enumerate(row_data, 1):

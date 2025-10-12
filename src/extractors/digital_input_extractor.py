@@ -71,7 +71,8 @@ class DigitalInputExtractor(BaseExtractor):
                     'program': program_name,
                     'tag_name': tag_name,
                     'description': description,
-                    'parent_name': parent_name
+                    'parent_name': parent_name,
+                    'part_assignment': 'N/A'  # Default, will be updated by PartSensorExtractor
                 }
                 
                 digital_inputs.append(digital_input)
@@ -144,13 +145,38 @@ class DigitalInputExtractor(BaseExtractor):
         # Digital inputs are extracted from all programs at once
         return []
     
+    def update_part_assignments(self, digital_inputs: List[Dict[str, Any]],
+                                sensor_to_parts: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        """
+        Update part assignments for digital inputs based on sensor-to-parts mapping.
+
+        Args:
+            digital_inputs: List of digital input tags
+            sensor_to_parts: Dictionary mapping sensor names to part lists
+
+        Returns:
+            Updated list of digital inputs with part assignments
+        """
+        for digital_input in digital_inputs:
+            tag_name = digital_input['tag_name']
+
+            if tag_name in sensor_to_parts:
+                parts = sensor_to_parts[tag_name]
+                # Join multiple parts with comma (if sensor belongs to multiple parts)
+                digital_input['part_assignment'] = ', '.join(sorted(parts))
+
+                if self.debug:
+                    logger.debug(f"Updated '{tag_name}' → {digital_input['part_assignment']}")
+
+        return digital_inputs
+
     def format_output(self, digital_inputs: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Format extracted data for output.
-        
+
         Args:
             digital_inputs: List of digital input tags
-            
+
         Returns:
             Dictionary with formatted output
         """
