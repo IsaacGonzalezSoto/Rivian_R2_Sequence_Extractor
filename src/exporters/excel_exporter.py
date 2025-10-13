@@ -34,15 +34,16 @@ class ExcelExporter:
         # Data cell background - soft beige for eye comfort
         self.data_fill = PatternFill(start_color=ExcelColors.DATA_FILL, end_color=ExcelColors.DATA_FILL, fill_type="solid")
     
-    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], output_path: str):
+    def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], valve_mappings_data: Dict[str, Any], output_path: str):
         """
-        Export sequences, transitions, digital inputs, and actuator groups to a single Excel file with multiple sheets.
+        Export sequences, transitions, digital inputs, actuator groups, and valve mappings to a single Excel file with multiple sheets.
 
         Args:
             sequences_data: Dictionary with sequence and actuator data
             transitions_data: Dictionary with transition permission data
             digital_inputs_data: Dictionary with digital input tags data
             actuator_groups_data: Dictionary with actuator group tags data
+            valve_mappings_data: Dictionary with valve mapping data
             output_path: Path for the output Excel file
         """
         wb = Workbook()
@@ -54,8 +55,8 @@ class ExcelExporter:
         # Create Complete_Flow sheet (new main view)
         self._create_complete_flow_sheet(wb, sequences_data, transitions_data)
 
-        # Create sequences sheet with actuator group descriptions
-        self._create_sequences_sheet(wb, sequences_data, actuator_groups_data)
+        # Create sequences sheet with actuator group descriptions and valve mappings
+        self._create_sequences_sheet(wb, sequences_data, actuator_groups_data, valve_mappings_data)
 
         # Create transitions sheet if there's data
         if transitions_data and transitions_data.get('transitions'):
@@ -65,12 +66,12 @@ class ExcelExporter:
         if digital_inputs_data and digital_inputs_data.get('digital_inputs'):
             self._create_digital_inputs_sheet(wb, digital_inputs_data)
 
-        # Note: Actuator groups are now included in Sequences_Actuators sheet as MM_Group_Description column
+        # Note: Actuator groups and valve mappings are now included in Sequences_Actuators sheet
 
         # Save workbook
         wb.save(output_path)
     
-    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any], actuator_groups_data: Dict[str, Any] = None):
+    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any], actuator_groups_data: Dict[str, Any] = None, valve_mappings_data: Dict[str, Any] = None):
         """
         Create the Sequences_Actuators sheet.
 
@@ -78,6 +79,7 @@ class ExcelExporter:
             wb: Workbook object
             data: Sequences data
             actuator_groups_data: Actuator groups data (optional)
+            valve_mappings_data: Valve mappings data (optional)
         """
         ws = wb.create_sheet("Sequences_Actuators")
 
@@ -86,6 +88,11 @@ class ExcelExporter:
         if actuator_groups_data and actuator_groups_data.get('actuator_groups'):
             for group in actuator_groups_data['actuator_groups']:
                 mm_to_description[group['tag_name']] = group['description']
+
+        # Create valve mapping dictionary: {MM1: {manifold: '...', valve_work: '1A', valve_home: '1B'}, ...}
+        mm_to_valve = {}
+        if valve_mappings_data and valve_mappings_data.get('valve_mappings'):
+            mm_to_valve = valve_mappings_data['valve_mappings']
 
         # Headers
         headers = [
@@ -96,6 +103,9 @@ class ExcelExporter:
             'Action_Name',
             'MM_Number',
             'MM_Group_Description',
+            'Manifold',
+            'Valve_Work',
+            'Valve_Home',
             'State',
             'Actuator_Count',
             'Actuators',
@@ -144,6 +154,16 @@ class ExcelExporter:
                     mm_number = action['mm_number'] or ''
                     mm_description = mm_to_description.get(mm_number, '') if mm_number else ''
 
+                    # Get valve mapping information
+                    manifold = ''
+                    valve_work = ''
+                    valve_home = ''
+                    if mm_number and mm_number in mm_to_valve:
+                        valve_info = mm_to_valve[mm_number]
+                        manifold = valve_info.get('manifold', '')
+                        valve_work = valve_info.get('valve_work', '')
+                        valve_home = valve_info.get('valve_home', '')
+
                     # Write one row per actuator
                     if not action['actuators']:
                         # No actuators, write one row
@@ -155,13 +175,16 @@ class ExcelExporter:
                             action['action_name'],
                             mm_number,
                             mm_description,
+                            manifold,
+                            valve_work,
+                            valve_home,
                             state_formatted,
                             action['actuator_count'],
                             '',
                             validation_status,
                             missing_indices
                         ]
-                        
+
                         for col_num, value in enumerate(row_data, 1):
                             cell = ws.cell(row=row_num, column=col_num, value=value)
                             cell.fill = self.data_fill  # Apply beige background
@@ -177,13 +200,16 @@ class ExcelExporter:
                                 action['action_name'],
                                 mm_number,
                                 mm_description,
+                                manifold,
+                                valve_work,
+                                valve_home,
                                 state_formatted,
                                 action['actuator_count'],
                                 actuator['description'],
                                 validation_status,
                                 missing_indices
                             ]
-                            
+
                             for col_num, value in enumerate(row_data, 1):
                                 cell = ws.cell(row=row_num, column=col_num, value=value)
                                 cell.fill = self.data_fill  # Apply beige background

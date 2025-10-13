@@ -37,6 +37,7 @@ The application runs interactively:
 - **transition_extractor.py**: Extracts transition permissions from `EmTransitionStates[X].AutoStartPerms.Y` assignments
 - **digital_input_extractor.py**: Extracts all UDT_DigitalInputHal tags across the entire L5X file
 - **part_sensor_extractor.py**: Maps digital input sensors to part present detection routines (`Cm{digits}_Part{X}`)
+- **valve_mapping_extractor.py**: Maps MM groups to physical valve manifolds and positions by extracting MM commands from fixture programs and parsing AOI_ValveManifold_V8 calls in MapIo program (multi-fixture files only)
 
 **src/validators/**
 - **array_validator.py**: Validates actuator arrays to ensure no missing indices
@@ -58,6 +59,7 @@ The application runs interactively:
      - DigitalInputExtractor scans program-scoped for UDT_DigitalInputHal tags
      - PartSensorExtractor identifies Part routines and maps sensors to parts using pattern: `XIC(SENSOR.Out.Value) OTE(Part{X}.inpSensors.Y)`
      - ActuatorGroupExtractor scans program-scoped for AOI_Actuator tags (MM groups)
+     - ValveMappingExtractor extracts valve mappings from MapIo (multi-fixture only): extracts MM command names from fixture MM routines, finds AOI_ValveManifold_V8 calls in MapIo, matches commands to valve positions
 4. ArrayValidator checks actuator index continuity
 5. ExcelExporter creates multi-sheet workbook with filename: `{fixture_name}_{routine_name}.xlsx`
 
@@ -78,6 +80,17 @@ The application runs interactively:
 Supports both single-fixture L5X files (e.g., `_010UA1_Fixture_Em0105_Program.L5X`) and multi-fixture L5X files (e.g., `BL03FFLR_PLC01.L5X` containing multiple fixture programs).
 
 **Part Present Detection**: Part routines follow pattern `Cm{digits}_Part{X}` where X is the part number. Sensors are mapped to parts using ladder logic: `XIC(SENSOR_NAME.Out.Value) OTE(Part{X}.inpSensors.Y)`. The system validates that the number of Part routines matches the number of `AOI_Part` tags.
+
+**Valve Mapping (Multi-Fixture Only)**: For multi-fixture files with MapIo program:
+1. Extracts MM command names from fixture program's MM routines (pattern: `,XIC(MM{N}.outWork) OTE(MM{N}_ToWork.Inp.Value`)
+2. Finds MapIo program and searches for AOI_ValveManifold_V8 calls that reference the fixture
+3. Parses AOI parameters:
+   - Parameter 3: Manifold name (e.g., `_010UA1KJ1_KEB1_Hw`)
+   - Parameters 6-7: MM1 Work/Home commands
+   - Parameters 8-9: MM2 Work/Home commands (continues in pairs)
+4. Calculates valve positions: valve_index = ((param_position - 6) // 2) + 1, valve position format: "{valve_index}A" (Work) or "{valve_index}B" (Home)
+5. Handles monoestable valves (Spare.DO entries show as "N/A")
+6. Single-fixture files without MapIo: valve mapping columns exist but remain empty (backward compatible)
 
 **Known Limitations**: The Part-Sensor extractor expects the simple pattern `XIC(SENSOR.Out.Value) OTE(PartX.inpSensors.Y)` with minimal spacing. If there is complex conditional logic between the XIC and OTE (e.g., `XIC(SENSOR.Out.Value) ,XIC(MM5.stsAtWork) XIO(Spare.Off) ] OTE(PartX.inpSensors.Y)`), the sensor may not be detected. This affects approximately 11% of test cases (1 out of 9 tested files). Example: `_040_UA1_Em0202_Program.L5X` Part3 and Part4.
 
@@ -110,7 +123,11 @@ output/BL03FFLR_PLC01/
 ### Excel File Structure
 Each Excel file contains:
 - **Complete_Flow**: Integrated view of sequences and transitions
-- **Sequences_Actuators**: Detailed sequences with actuators and MM group descriptions (Column G: MM_Group_Description shows 'Group1 Clamps', 'Group 4 Pins', etc.)
+- **Sequences_Actuators**: Detailed sequences with actuators, MM group descriptions, and valve mappings
+  - Column G: MM_Group_Description (e.g., 'Group1 Clamps', 'Group 4 Pins')
+  - Column H: Manifold (e.g., '_010UA1KJ1_KEB1_Hw') - Multi-fixture only
+  - Column I: Valve_Work (e.g., '1A', '2A') - Multi-fixture only
+  - Column J: Valve_Home (e.g., '1B', '2B') - Multi-fixture only
 - **Transitions**: Transition permissions table
 - **Digital_Inputs**: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
 

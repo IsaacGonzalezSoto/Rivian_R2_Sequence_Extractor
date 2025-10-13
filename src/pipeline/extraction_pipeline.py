@@ -23,6 +23,7 @@ from ..extractors.transition_extractor import TransitionExtractor
 from ..extractors.digital_input_extractor import DigitalInputExtractor
 from ..extractors.part_sensor_extractor import PartSensorExtractor
 from ..extractors.actuator_group_extractor import ActuatorGroupExtractor
+from ..extractors.valve_mapping_extractor import ValveMappingExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
 
@@ -69,6 +70,7 @@ class ExtractionPipeline:
         self.digital_input_extractor = DigitalInputExtractor(debug=debug)
         self.part_sensor_extractor = PartSensorExtractor(debug=debug)
         self.actuator_group_extractor = ActuatorGroupExtractor(debug=debug)
+        self.valve_mapping_extractor = ValveMappingExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
 
@@ -139,6 +141,9 @@ class ExtractionPipeline:
         # Determine if we need subfolders (multi-fixture scenario)
         multi_fixture_mode = len(fixture_programs) > 1
 
+        # Check if MapIo program exists (needed for valve mappings)
+        has_mapio = self.navigator.find_program_by_name('MapIo') is not None
+
         for fixture_info in fixture_programs:
             program_name = fixture_info['program_name']
             em_routines = fixture_info['em_routines']
@@ -169,7 +174,9 @@ class ExtractionPipeline:
                 routine_data = self.process_sequence_routine(
                     routine_name=routine_name,
                     program_name=program_name,
-                    fixture_output_folder=fixture_output_folder
+                    fixture_output_folder=fixture_output_folder,
+                    multi_fixture_mode=multi_fixture_mode,
+                    has_mapio=has_mapio
                 )
                 all_routines_data.append(routine_data)
 
@@ -183,7 +190,8 @@ class ExtractionPipeline:
 
         return all_routines_data
     
-    def process_sequence_routine(self, routine_name: str, program_name: str = None, fixture_output_folder: str = None) -> Dict[str, Any]:
+    def process_sequence_routine(self, routine_name: str, program_name: str = None, fixture_output_folder: str = None,
+                                 multi_fixture_mode: bool = False, has_mapio: bool = False) -> Dict[str, Any]:
         """
         Process a complete sequence routine.
 
@@ -191,6 +199,8 @@ class ExtractionPipeline:
             routine_name: Name of the routine to process
             program_name: Name of the program containing the routine (optional, for multi-fixture support)
             fixture_output_folder: Output folder for this specific fixture (optional)
+            multi_fixture_mode: Whether processing multi-fixture file
+            has_mapio: Whether MapIo program exists in L5X
 
         Returns:
             Dictionary with processing information
@@ -222,6 +232,14 @@ class ExtractionPipeline:
         # Extract actuator groups (scoped to program if multi-fixture)
         actuator_groups_output = self.extract_actuator_groups(program_name)
 
+        # Extract valve mappings (only for multi-fixture with MapIo)
+        valve_mappings_output = None
+        if multi_fixture_mode and has_mapio and program_name:
+            valve_mappings_output = self.extract_valve_mappings(program_name)
+        else:
+            # Create empty valve mappings for single-fixture or no MapIo
+            valve_mappings_output = {'valve_mappings': {}, 'mapping_count': 0}
+
         # Export to Excel (one file with multiple sheets)
         # Extract fixture name from program_name if provided
         if program_name:
@@ -235,9 +253,10 @@ class ExtractionPipeline:
         excel_path = os.path.join(output_folder, excel_filename)
 
         try:
-            self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, actuator_groups_output, excel_path)
+            self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output,
+                                      actuator_groups_output, valve_mappings_output, excel_path)
             logger.info(f"✓ Excel file saved to: {excel_path}")
-            logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences, {actuator_groups_output.get('group_count', 0)} MM groups)")
+            logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences, {actuator_groups_output.get('group_count', 0)} MM groups, {valve_mappings_output.get('mapping_count', 0)} valve mappings)")
             logger.info(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
             logger.info(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
         except Exception as e:
@@ -251,7 +270,8 @@ class ExtractionPipeline:
             'sequences_count': len(sequences_data),
             'transitions_count': transitions_output.get('transition_count', 0),
             'digital_inputs_count': digital_inputs_output.get('input_count', 0),
-            'actuator_groups_count': actuator_groups_output.get('group_count', 0)
+            'actuator_groups_count': actuator_groups_output.get('group_count', 0),
+            'valve_mappings_count': valve_mappings_output.get('mapping_count', 0)
         }
     
     def extract_transitions(self, routine_name: str, program_name: str = None) -> Dict[str, Any]:
@@ -562,3 +582,26 @@ class ExtractionPipeline:
             formatted.append(sequence)
 
         return formatted
+
+    def extract_valve_mappings(self, program_name: str) -> Dict[str, Any]:
+        """
+        Extract valve mappings for a fixture program from MapIo.
+
+        Args:
+            program_name: Fixture program name
+
+        Returns:
+            Dictionary with valve mapping data
+        """
+        if self.debug:
+            logger.debug(f"Extracting Valve Mappings for {program_name}")
+
+        # Use the valve mapping extractor
+        valve_mappings = self.valve_mapping_extractor.find_items(
+            self.navigator.get_root(),
+            routine_name=None,  # Not used
+            program_name=program_name
+        )
+
+        # Format output
+        return self.valve_mapping_extractor.format_output(None, valve_mappings)
