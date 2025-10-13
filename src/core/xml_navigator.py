@@ -236,7 +236,7 @@ class XMLNavigator:
         Identify fixture programs in the L5X file.
 
         Fixtures are identified by:
-        1. Primary: Name contains pattern _\d{3}UA\d_ (e.g., _010UA1_)
+        1. Primary: Name contains pattern _\d{3}_?UA\d_ (e.g., _010UA1_ or _010_UA1_)
         2. Secondary: Name contains "Fixture" word
         3. Validation: Must have at least one EmStatesAndSequences routine
 
@@ -255,8 +255,9 @@ class XMLNavigator:
         all_programs = self.find_all_programs()
         fixture_programs = []
 
-        # Pattern for fixture identification: _\d{3}UA\d_
-        fixture_pattern = r'_\d{3}UA\d_'
+        # Pattern for fixture identification: _\d{3}_?UA\d_
+        # Matches both _010UA1_ (FFLR) and _010_UA1_ (GATE) with optional underscore
+        fixture_pattern = r'_\d{3}_?UA\d_'
 
         for program in all_programs:
             program_name = program.get('Name', '')

@@ -29,7 +29,7 @@ The application runs interactively:
 - **base_extractor.py**: Abstract base class implementing Template Method pattern for all extractors. Defines extraction flow: find_items() → validate_items() → format_output(). Supports program-scoped extraction for multi-fixture files.
 
 **src/pipeline/**
-- **extraction_pipeline.py**: Main orchestrator that coordinates extractors, validators, and exporters. Automatically detects fixture programs (single or multiple) in L5X files using pattern `_\d{3}UA\d_` or "Fixture" keyword. Processes routines starting with 'EmStatesAndSequences', extracts sequences/actions/actuators, transitions, and digital inputs. For multi-fixture files, creates subfolder per fixture; for single-fixture files, maintains backward compatibility with flat structure.
+- **extraction_pipeline.py**: Main orchestrator that coordinates extractors, validators, and exporters. Automatically detects fixture programs (single or multiple) in L5X files using pattern `_\d{3}_?UA\d_` or "Fixture" keyword. Processes routines starting with 'EmStatesAndSequences', extracts sequences/actions/actuators, transitions, and digital inputs. For multi-fixture files, creates subfolder per fixture; for single-fixture files, maintains backward compatibility with flat structure.
 
 **src/extractors/**
 - **actuator_extractor.py**: Finds actuator descriptions from MM routines by parsing MOVE statements: `MOVE('DESCRIPTION', MM{X}Cyls[INDEX].Stg.Name)`
@@ -48,7 +48,7 @@ The application runs interactively:
 ### Data Flow
 
 1. ExtractionPipeline initializes and loads L5X file
-2. XMLNavigator identifies fixture programs using pattern `_\d{3}UA\d_` or "Fixture" keyword, validated by presence of EmStatesAndSequences routines
+2. XMLNavigator identifies fixture programs using pattern `_\d{3}_?UA\d_` or "Fixture" keyword, validated by presence of EmStatesAndSequences routines
 3. For each fixture program:
    - Determines output folder: subfolder for multi-fixture files, base folder for single-fixture (backward compatible)
    - For each EmStatesAndSequences routine in the program:
@@ -74,10 +74,12 @@ The application runs interactively:
 **Transition Detection**: Transitions use `#region Transition State {index} - {descriptive_name}` with AutoStartPerms assignments
 
 **Fixture Identification**: Fixtures identified by:
-1. Primary pattern: `_\d{3}UA\d_` in program name (e.g., `_010UA1_Fixture_Em0105`)
+1. Primary pattern: `_\d{3}_?UA\d_` in program name (e.g., `_010UA1_` or `_010_UA1_`)
+   - Supports both formats: with underscore (GATE) and without (FFLR)
+   - Only matches "UA" fixtures (excludes UB, GL, HL, etc.)
 2. Secondary pattern: "Fixture" keyword in program name
 3. Validation: Must contain at least one `EmStatesAndSequences` routine
-Supports both single-fixture L5X files (e.g., `_010UA1_Fixture_Em0105_Program.L5X`) and multi-fixture L5X files (e.g., `BL03FFLR_PLC01.L5X` containing multiple fixture programs).
+Supports both single-fixture L5X files (e.g., `_010UA1_Fixture_Em0105_Program.L5X`) and multi-fixture L5X files (e.g., `BL03FFLR_PLC01.L5X`, `BL03GATE_PLC01.L5X` containing multiple fixture programs).
 
 **Part Present Detection**: Part routines follow pattern `Cm{digits}_Part{X}` where X is the part number. Sensors are mapped to parts using ladder logic: `XIC(SENSOR_NAME.Out.Value) OTE(Part{X}.inpSensors.Y)`. The system validates that the number of Part routines matches the number of `AOI_Part` tags.
 
