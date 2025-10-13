@@ -180,7 +180,8 @@ class ValveMappingExtractor(BaseExtractor):
                     text = text_elem.text
 
                     # Check if this rung contains our fixture's commands
-                    if program_name not in text:
+                    # Handle backslash escapes in ladder logic text (e.g., \_010UA1_Fixture_Em0105)
+                    if program_name not in text and f"\\{program_name}" not in text:
                         continue
 
                     # Find AOI_ValveManifold_V8 calls
