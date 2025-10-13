@@ -126,11 +126,13 @@ output/BL03FFLR_PLC01/
 ### Excel File Structure
 Each Excel file contains:
 - **Complete_Flow**: Integrated view of sequences and transitions
-- **Sequences_Actuators**: Detailed sequences with actuators, MM group descriptions, and valve mappings
+- **Sequences_Actuators**: Detailed sequences with actuators, MM group descriptions, valve mappings, and electrical diagram references
   - Column G: MM_Group_Description (e.g., 'Group1 Clamps', 'Group 4 Pins')
   - Column H: Manifold (e.g., '_010UA1KJ1_KEB1_Hw') - Multi-fixture only
   - Column I: Valve_Work (e.g., '1A', '2A') - Multi-fixture only
   - Column J: Valve_Home (e.g., '1B', '2B') - Multi-fixture only
+  - Column P: Controls_Manifold_Name (e.g., 'KJ1', 'KJ12') - Extracted from Manifold using pattern `KJ\d{1,2}`
+  - Column Q: Controls_Valve_Name (e.g., '=KJ1-QMB1', '=KJ12-QMB5') - Electrical diagram nomenclature format
 - **Transitions**: Transition permissions table
 - **Digital_Inputs**: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
 

@@ -33,7 +33,43 @@ class ExcelExporter:
 
         # Data cell background - soft beige for eye comfort
         self.data_fill = PatternFill(start_color=ExcelColors.DATA_FILL, end_color=ExcelColors.DATA_FILL, fill_type="solid")
-    
+
+    def _extract_kj_name(self, manifold: str) -> str:
+        """
+        Extract KJ{x} pattern from manifold name.
+
+        Args:
+            manifold: Manifold name (e.g., '_010UA1KJ1_KEB1_Hw')
+
+        Returns:
+            KJ name (e.g., 'KJ1') or 'N/A' if not found
+        """
+        import re
+        if not manifold:
+            return 'N/A'
+
+        match = re.search(r'KJ(\d{1,2})', manifold)
+        return f"KJ{match.group(1)}" if match else 'N/A'
+
+    def _build_valve_diagram_name(self, kj_name: str, valve_work: str) -> str:
+        """
+        Build electrical diagram valve nomenclature.
+
+        Args:
+            kj_name: Controls manifold name (e.g., 'KJ1')
+            valve_work: Valve work position (e.g., '1A', '2A')
+
+        Returns:
+            Diagram name (e.g., '=KJ1-QMB1') or 'N/A'
+        """
+        if kj_name == 'N/A' or not valve_work or valve_work == 'N/A':
+            return 'N/A'
+
+        # Extract valve number from '1A' -> '1'
+        valve_num = valve_work.rstrip('AB')
+
+        return f"={kj_name}-QMB{valve_num}"
+
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], valve_mappings_data: Dict[str, Any], output_path: str):
         """
         Export sequences, transitions, digital inputs, actuator groups, and valve mappings to a single Excel file with multiple sheets.
@@ -110,7 +146,9 @@ class ExcelExporter:
             'Actuator_Count',
             'Actuators',
             'Validation_Status',
-            'Missing_Indices'
+            'Missing_Indices',
+            'Controls_Manifold_Name',
+            'Controls_Valve_Name'
         ]
         
         # Write headers
@@ -164,6 +202,10 @@ class ExcelExporter:
                         valve_work = valve_info.get('valve_work', '')
                         valve_home = valve_info.get('valve_home', '')
 
+                    # Extract controls manifold name and build valve diagram name
+                    controls_manifold_name = self._extract_kj_name(manifold)
+                    controls_valve_name = self._build_valve_diagram_name(controls_manifold_name, valve_work)
+
                     # Write one row per actuator
                     if not action['actuators']:
                         # No actuators, write one row
@@ -182,7 +224,9 @@ class ExcelExporter:
                             action['actuator_count'],
                             '',
                             validation_status,
-                            missing_indices
+                            missing_indices,
+                            controls_manifold_name,
+                            controls_valve_name
                         ]
 
                         for col_num, value in enumerate(row_data, 1):
@@ -207,7 +251,9 @@ class ExcelExporter:
                                 action['actuator_count'],
                                 actuator['description'],
                                 validation_status,
-                                missing_indices
+                                missing_indices,
+                                controls_manifold_name,
+                                controls_valve_name
                             ]
 
                             for col_num, value in enumerate(row_data, 1):
