@@ -25,13 +25,14 @@ class DigitalInputExtractor(BaseExtractor):
         """
         return ""
     
-    def extract_all_digital_inputs(self, root) -> List[Dict[str, Any]]:
+    def extract_all_digital_inputs(self, root, program_name: str = None) -> List[Dict[str, Any]]:
         """
         Extract all digital input tags from all programs in the L5X.
-        
+
         Args:
-            root: XML tree root
-            
+            root: XML tree root or Program element
+            program_name: Optional program name (for logging, root should already be scoped)
+
         Returns:
             List of digital input tags with their information
         """
@@ -39,9 +40,13 @@ class DigitalInputExtractor(BaseExtractor):
 
         if self.debug:
             logger.debug("[DigitalInputExtractor] Searching for UDT_DigitalInputHal tags...")
+            if program_name:
+                logger.debug(f"  Scoped to program: {program_name}")
 
-        # Find all programs in the controller
-        programs = root.findall('.//Programs/Program')
+        # Find all programs in the search scope
+        # If root is already a Program element, this will search within it
+        # If root is the full L5X root, this will find all programs
+        programs = root.findall('.//Programs/Program') if root.tag != 'Program' else [root]
 
         if self.debug:
             logger.debug(f"Found {len(programs)} program(s) to search")

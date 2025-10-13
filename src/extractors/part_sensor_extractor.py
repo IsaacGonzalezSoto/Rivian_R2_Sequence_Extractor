@@ -31,12 +31,13 @@ class PartSensorExtractor(BaseExtractor):
         """
         return self.SENSOR_ASSIGNMENT_PATTERN
 
-    def extract_all_part_sensors(self, root) -> Dict[str, List[str]]:
+    def extract_all_part_sensors(self, root, program_name: str = None) -> Dict[str, List[str]]:
         """
         Extract all sensor-to-part mappings from Part routines.
 
         Args:
-            root: XML tree root
+            root: XML tree root or Program element
+            program_name: Optional program name (for logging, root should already be scoped)
 
         Returns:
             Dictionary mapping sensor_name -> list of part names (e.g., {'BG1_BGB1': ['Part1', 'Part2']})
@@ -45,9 +46,15 @@ class PartSensorExtractor(BaseExtractor):
 
         if self.debug:
             logger.debug("[PartSensorExtractor] Searching for Part routines...")
+            if program_name:
+                logger.debug(f"  Scoped to program: {program_name}")
 
-        # Find all routines in the controller
-        routines = root.findall('.//Programs/Program/Routines/Routine')
+        # Find all routines in the search scope
+        # If root is a Program element, search within it; otherwise search all programs
+        if root.tag == 'Program':
+            routines = root.findall('.//Routines/Routine')
+        else:
+            routines = root.findall('.//Programs/Program/Routines/Routine')
 
         part_routines_found = []
 

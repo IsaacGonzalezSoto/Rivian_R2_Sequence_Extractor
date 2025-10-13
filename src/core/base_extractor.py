@@ -26,29 +26,38 @@ class BaseExtractor(ABC):
         """
         self.debug = debug
     
-    def extract(self, root, routine_name: str) -> Dict[str, Any]:
+    def extract(self, root, routine_name: str, program_name: str = None, **kwargs) -> Dict[str, Any]:
         """
         Template method: Defines the complete extraction flow.
-        
+
         Args:
             root: Root of the L5X XML tree
             routine_name: Name of the routine to process
-            
+            program_name: Optional program name for scoping (multi-fixture support)
+            **kwargs: Additional keyword arguments for subclass flexibility
+
         Returns:
             Dictionary with extracted data
         """
         if self.debug:
             logger.debug(f"[{self.__class__.__name__}] Processing routine: {routine_name}")
+            if program_name:
+                logger.debug(f"  Scoped to program: {program_name}")
 
         # 1. Find items according to the extractor's specific pattern
-        items = self.find_items(root, routine_name)
+        # Pass program_name to find_items if the subclass supports it
+        try:
+            items = self.find_items(root, routine_name, program_name=program_name, **kwargs)
+        except TypeError:
+            # Fallback for extractors that don't support program_name parameter yet
+            items = self.find_items(root, routine_name)
 
         if self.debug:
             logger.debug(f"[{self.__class__.__name__}] Items found: {len(items)}")
-        
+
         # 2. Validate the found items
         validated_items = self.validate_items(root, items)
-        
+
         # 3. Format the output
         return self.format_output(routine_name, validated_items)
     

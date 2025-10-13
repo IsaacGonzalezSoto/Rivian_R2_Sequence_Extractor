@@ -188,10 +188,10 @@ class XMLNavigator:
     def get_routine_info(self, routine: ET.Element) -> dict:
         """
         Get basic information from a routine.
-        
+
         Args:
             routine: Routine element
-            
+
         Returns:
             Dictionary with routine information
         """
@@ -200,3 +200,124 @@ class XMLNavigator:
             'type': routine.get('Type', 'Unknown'),
             'description': routine.find('.//Description')
         }
+
+    def find_all_programs(self) -> List[ET.Element]:
+        """
+        Find all programs in the controller.
+
+        Returns:
+            List of Program elements
+        """
+        return self.root.findall('.//Controller/Programs/Program')
+
+    def find_programs_by_pattern(self, pattern: str) -> List[ET.Element]:
+        """
+        Search for programs matching a pattern in the name.
+
+        Args:
+            pattern: Pattern to search (regex)
+
+        Returns:
+            List of matching programs with their info
+        """
+        import re
+        all_programs = self.find_all_programs()
+        matching_programs = []
+
+        for program in all_programs:
+            program_name = program.get('Name', '')
+            if re.search(pattern, program_name):
+                matching_programs.append(program)
+
+        return matching_programs
+
+    def find_fixture_programs(self) -> List[dict]:
+        """
+        Identify fixture programs in the L5X file.
+
+        Fixtures are identified by:
+        1. Primary: Name contains pattern _\d{3}UA\d_ (e.g., _010UA1_)
+        2. Secondary: Name contains "Fixture" word
+        3. Validation: Must have at least one EmStatesAndSequences routine
+
+        Returns:
+            List of dictionaries with fixture program information:
+            [
+                {
+                    'program_element': ET.Element,
+                    'program_name': str,
+                    'em_routines': List[str]  # Names of EmStatesAndSequences routines
+                }
+            ]
+        """
+        import re
+
+        all_programs = self.find_all_programs()
+        fixture_programs = []
+
+        # Pattern for fixture identification: _\d{3}UA\d_
+        fixture_pattern = r'_\d{3}UA\d_'
+
+        for program in all_programs:
+            program_name = program.get('Name', '')
+
+            # Check if it matches fixture pattern or contains "Fixture"
+            is_fixture_candidate = (
+                re.search(fixture_pattern, program_name) or
+                'Fixture' in program_name
+            )
+
+            if is_fixture_candidate:
+                # Validate: must have EmStatesAndSequences routines
+                routines = program.findall('.//Routines/Routine')
+                em_routines = [
+                    r.get('Name') for r in routines
+                    if r.get('Name', '').startswith('EmStatesAndSequences')
+                ]
+
+                if em_routines:
+                    fixture_programs.append({
+                        'program_element': program,
+                        'program_name': program_name,
+                        'em_routines': em_routines
+                    })
+                    logger.debug(f"Identified fixture program: {program_name} with {len(em_routines)} EmStatesAndSequences routines")
+
+        logger.info(f"Found {len(fixture_programs)} fixture program(s)")
+        return fixture_programs
+
+    def find_program_by_name(self, program_name: str) -> Optional[ET.Element]:
+        """
+        Find a program by its exact name.
+
+        Args:
+            program_name: Program name to search
+
+        Returns:
+            Program element or None if not found
+        """
+        programs = self.root.findall(f'.//Controller/Programs/Program[@Name="{program_name}"]')
+        return programs[0] if programs else None
+
+    def find_routines_in_program(self, program_name: str, prefix: str = None) -> List[ET.Element]:
+        """
+        Find routines within a specific program, optionally filtered by prefix.
+
+        Args:
+            program_name: Name of the program to search in
+            prefix: Optional prefix filter for routine names
+
+        Returns:
+            List of Routine elements
+        """
+        program = self.find_program_by_name(program_name)
+        if not program:
+            logger.warning(f"Program not found: {program_name}")
+            return []
+
+        routines = program.findall('.//Routines/Routine')
+
+        if prefix:
+            routines = [r for r in routines if r.get('Name', '').startswith(prefix)]
+
+        return routines

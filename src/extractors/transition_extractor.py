@@ -25,13 +25,14 @@ class TransitionExtractor(BaseExtractor):
         """
         return r'EmTransitionStates\[(\d+)\]\.AutoStartPerms\.(\d+)\s*:=\s*([^;]+);\s*(?://(.*))?'
     
-    def find_items(self, root, routine_name: str) -> List[Dict[str, Any]]:
+    def find_items(self, root, routine_name: str, program_name: str = None) -> List[Dict[str, Any]]:
         """
         Search for transition permissions in an EmStatesAndSequences routine.
 
         Args:
-            root: XML tree root
+            root: XML tree root or Program element
             routine_name: Routine name (e.g., 'EmStatesAndSequences_R2S')
+            program_name: Optional program name for scoping (multi-fixture support)
 
         Returns:
             List of dictionaries with transition permission information
@@ -39,10 +40,19 @@ class TransitionExtractor(BaseExtractor):
         from ..core.xml_navigator import XMLNavigator
 
         navigator = XMLNavigator(root=root)
-        
-        # Search for the specific routine
-        routine = navigator.find_routine_by_name(routine_name)
-        
+
+        # Search for the specific routine (scoped to program if provided)
+        if program_name:
+            program_element = navigator.find_program_by_name(program_name)
+            if program_element:
+                routines = program_element.findall(f'.//Routines/Routine[@Name="{routine_name}"]')
+                routine = routines[0] if routines else None
+            else:
+                logger.warning(f"Program not found: {program_name}, searching globally")
+                routine = navigator.find_routine_by_name(routine_name)
+        else:
+            routine = navigator.find_routine_by_name(routine_name)
+
         if not routine:
             if self.debug:
                 logger.warning(f"Routine not found: {routine_name}")

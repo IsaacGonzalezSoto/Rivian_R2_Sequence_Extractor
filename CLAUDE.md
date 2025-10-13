@@ -25,11 +25,11 @@ The application runs interactively:
 ### Core Components
 
 **src/core/**
-- **xml_navigator.py**: Utility for navigating L5X XML structure using common XPath patterns. Provides methods to find routines, tags, and extract routine content.
-- **base_extractor.py**: Abstract base class implementing Template Method pattern for all extractors. Defines extraction flow: find_items() → validate_items() → format_output()
+- **xml_navigator.py**: Utility for navigating L5X XML structure using common XPath patterns. Provides methods to find routines, tags, programs, and extract routine content. Includes fixture program identification logic using pattern matching.
+- **base_extractor.py**: Abstract base class implementing Template Method pattern for all extractors. Defines extraction flow: find_items() → validate_items() → format_output(). Supports program-scoped extraction for multi-fixture files.
 
 **src/pipeline/**
-- **extraction_pipeline.py**: Main orchestrator that coordinates extractors, validators, and exporters. Processes routines starting with 'EmStatesAndSequences', extracts sequences/actions/actuators, transitions, and digital inputs. Automatically extracts fixture name from L5X filename (e.g., `_010UA1_Fixture_...` → `010UA1`) for output file naming.
+- **extraction_pipeline.py**: Main orchestrator that coordinates extractors, validators, and exporters. Automatically detects fixture programs (single or multiple) in L5X files using pattern `_\d{3}UA\d_` or "Fixture" keyword. Processes routines starting with 'EmStatesAndSequences', extracts sequences/actions/actuators, transitions, and digital inputs. For multi-fixture files, creates subfolder per fixture; for single-fixture files, maintains backward compatibility with flat structure.
 
 **src/extractors/**
 - **actuator_extractor.py**: Finds actuator descriptions from MM routines by parsing MOVE statements: `MOVE('DESCRIPTION', MM{X}Cyls[INDEX].Stg.Name)`
@@ -46,16 +46,18 @@ The application runs interactively:
 
 ### Data Flow
 
-1. ExtractionPipeline initializes and extracts fixture name from L5X filename using pattern `_([A-Z0-9]+)_Fixture`
-2. XMLNavigator loads L5X file and finds routines starting with 'EmStatesAndSequences'
-3. For each routine:
-   - Parses regex pattern `EmSeqList[seq][step][action] := ActionMM{X}{State}.outActionNum`
-   - Extracts sequence names from `#region Sequence {N} - {Name}` comments
-   - For each ActionMM{X} found, ActuatorExtractor finds corresponding MM routine and extracts actuators
-   - TransitionExtractor processes transition permissions from the same routine
-   - DigitalInputExtractor scans entire L5X for UDT_DigitalInputHal tags
-   - PartSensorExtractor identifies Part routines and maps sensors to parts using pattern: `XIC(SENSOR.Out.Value) OTE(Part{X}.inpSensors.Y)`
-   - ActuatorGroupExtractor scans entire L5X for AOI_Actuator tags (MM groups)
+1. ExtractionPipeline initializes and loads L5X file
+2. XMLNavigator identifies fixture programs using pattern `_\d{3}UA\d_` or "Fixture" keyword, validated by presence of EmStatesAndSequences routines
+3. For each fixture program:
+   - Determines output folder: subfolder for multi-fixture files, base folder for single-fixture (backward compatible)
+   - For each EmStatesAndSequences routine in the program:
+     - Parses regex pattern `EmSeqList[seq][step][action] := ActionMM{X}{State}.outActionNum`
+     - Extracts sequence names from `#region Sequence {N} - {Name}` comments
+     - For each ActionMM{X} found, ActuatorExtractor finds corresponding MM routine and extracts actuators
+     - TransitionExtractor processes transition permissions from the same routine
+     - DigitalInputExtractor scans program-scoped for UDT_DigitalInputHal tags
+     - PartSensorExtractor identifies Part routines and maps sensors to parts using pattern: `XIC(SENSOR.Out.Value) OTE(Part{X}.inpSensors.Y)`
+     - ActuatorGroupExtractor scans program-scoped for AOI_Actuator tags (MM groups)
 4. ArrayValidator checks actuator index continuity
 5. ExcelExporter creates multi-sheet workbook with filename: `{fixture_name}_{routine_name}.xlsx`
 
@@ -69,7 +71,11 @@ The application runs interactively:
 
 **Transition Detection**: Transitions use `#region Transition State {index} - {descriptive_name}` with AutoStartPerms assignments
 
-**Fixture Name Extraction**: Fixture name extracted from L5X filename using pattern `_([A-Z0-9]+)_Fixture` (e.g., `_010UA1_Fixture_Em0105_Program.L5X` → `010UA1`). Falls back to `complete` if pattern not found.
+**Fixture Identification**: Fixtures identified by:
+1. Primary pattern: `_\d{3}UA\d_` in program name (e.g., `_010UA1_Fixture_Em0105`)
+2. Secondary pattern: "Fixture" keyword in program name
+3. Validation: Must contain at least one `EmStatesAndSequences` routine
+Supports both single-fixture L5X files (e.g., `_010UA1_Fixture_Em0105_Program.L5X`) and multi-fixture L5X files (e.g., `BL03FFLR_PLC01.L5X` containing multiple fixture programs).
 
 **Part Present Detection**: Part routines follow pattern `Cm{digits}_Part{X}` where X is the part number. Sensors are mapped to parts using ladder logic: `XIC(SENSOR_NAME.Out.Value) OTE(Part{X}.inpSensors.Y)`. The system validates that the number of Part routines matches the number of `AOI_Part` tags.
 
@@ -77,14 +83,36 @@ The application runs interactively:
 
 ## Output Structure
 
+### Single-Fixture Files
 Generated Excel files in `output/{L5X_filename}/`:
-- **{fixture_name}_{routine_name}.xlsx** (e.g., `010UA1_EmStatesAndSequences_R2.xlsx`) containing:
-  - Complete_Flow: Integrated view of sequences and transitions
-  - Sequences_Actuators: Detailed sequences with actuators and MM group descriptions (Column G: MM_Group_Description shows 'Group1 Clamps', 'Group 4 Pins', etc.)
-  - Transitions: Transition permissions table
-  - Digital_Inputs: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
+```
+output/_010UA1_Fixture_Em0105_Program/
+├── 010UA1_Fixture_Em0105_EmStatesAndSequences_Common.xlsx
+└── 010UA1_Fixture_Em0105_EmStatesAndSequences_R2S.xlsx
+```
 
-**Note**: The fixture name is automatically extracted from the L5X filename. For files like `_010UA1_Fixture_Em0105_Program.L5X`, the output will be `010UA1_EmStatesAndSequences_R2.xlsx` instead of the old format `complete_EmStatesAndSequences_R2.xlsx`.
+### Multi-Fixture Files
+Generated Excel files in `output/{L5X_filename}/{program_name}/`:
+```
+output/BL03FFLR_PLC01/
+├── _010UA1_Fixture_Em0105/
+│   ├── 010UA1_Fixture_Em0105_EmStatesAndSequences_Common.xlsx
+│   └── 010UA1_Fixture_Em0105_EmStatesAndSequences_R2S.xlsx
+├── _020UA1_Fixture_Em0207/
+│   ├── 020UA1_Fixture_Em0207_EmStatesAndSequences_Common.xlsx
+│   └── 020UA1_Fixture_Em0207_EmStatesAndSequences_R2S.xlsx
+├── _030UA1_Fixture_Em0301/
+│   └── ...
+└── _040UA1_Fixture_Em0302/
+    └── ...
+```
+
+### Excel File Structure
+Each Excel file contains:
+- **Complete_Flow**: Integrated view of sequences and transitions
+- **Sequences_Actuators**: Detailed sequences with actuators and MM group descriptions (Column G: MM_Group_Description shows 'Group1 Clamps', 'Group 4 Pins', etc.)
+- **Transitions**: Transition permissions table
+- **Digital_Inputs**: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
 
 ## Dependencies
 
