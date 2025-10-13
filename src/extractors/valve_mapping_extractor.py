@@ -14,10 +14,12 @@ class ValveMappingExtractor(BaseExtractor):
     """
     Extracts valve mapping information from MapIo program.
 
+    Supports AOI_ValveManifold_V4, V8, V12, and V16 (generic version detection).
+
     Workflow:
     1. Extract MM commands (MM1_ToWork, MM1_ToHome) from fixture program
     2. Find MapIo program in L5X
-    3. Parse AOI_ValveManifold_V8 calls
+    3. Parse AOI_ValveManifold_V* calls (V4, V8, V12, V16)
     4. Match commands to valve positions
     5. Return mapping: {MM1: {manifold: '...', work: '1A', home: '1B'}}
     """
@@ -29,8 +31,8 @@ class ValveMappingExtractor(BaseExtractor):
     # Example: ,XIC(MM1.outWork) OTE(MM1_ToWork.Inp.Value
     COMMAND_PATTERN = r',XIC\(MM(\d+)\.(out(?:Work|Home))\)\s+OTE\(([A-Za-z0-9_]+)'
 
-    # Pattern to find AOI_ValveManifold_V8 calls
-    AOI_PATTERN = r'AOI_ValveManifold_V8\(([^)]+)\)'
+    # Pattern to find AOI_ValveManifold calls (supports V4, V8, V12, V16, etc.)
+    AOI_PATTERN = r'AOI_ValveManifold_V\d+\(([^)]+)\)'
 
     def get_pattern(self) -> str:
         """
@@ -142,7 +144,9 @@ class ValveMappingExtractor(BaseExtractor):
 
     def _extract_valve_mappings_from_mapio(self, root, program_name: str, mm_commands: Dict) -> List[Dict[str, Any]]:
         """
-        Extract valve mappings from MapIo program's AOI_ValveManifold_V8 calls.
+        Extract valve mappings from MapIo program's AOI_ValveManifold_V* calls.
+
+        Supports all AOI versions: V4, V8, V12, V16.
 
         Args:
             root: XML tree root
