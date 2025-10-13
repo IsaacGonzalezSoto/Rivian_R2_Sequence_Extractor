@@ -54,8 +54,8 @@ class ExcelExporter:
         # Create Complete_Flow sheet (new main view)
         self._create_complete_flow_sheet(wb, sequences_data, transitions_data)
 
-        # Create sequences sheet
-        self._create_sequences_sheet(wb, sequences_data)
+        # Create sequences sheet with actuator group descriptions
+        self._create_sequences_sheet(wb, sequences_data, actuator_groups_data)
 
         # Create transitions sheet if there's data
         if transitions_data and transitions_data.get('transitions'):
@@ -65,23 +65,28 @@ class ExcelExporter:
         if digital_inputs_data and digital_inputs_data.get('digital_inputs'):
             self._create_digital_inputs_sheet(wb, digital_inputs_data)
 
-        # Create actuator groups sheet if there's data
-        if actuator_groups_data and actuator_groups_data.get('actuator_groups'):
-            self._create_actuator_groups_sheet(wb, actuator_groups_data)
+        # Note: Actuator groups are now included in Sequences_Actuators sheet as MM_Group_Description column
 
         # Save workbook
         wb.save(output_path)
     
-    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any]):
+    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any], actuator_groups_data: Dict[str, Any] = None):
         """
         Create the Sequences_Actuators sheet.
-        
+
         Args:
             wb: Workbook object
             data: Sequences data
+            actuator_groups_data: Actuator groups data (optional)
         """
         ws = wb.create_sheet("Sequences_Actuators")
-        
+
+        # Create MM mapping dictionary: {MM1: 'Group1 Clamps', MM2: 'Group2 Clamps', ...}
+        mm_to_description = {}
+        if actuator_groups_data and actuator_groups_data.get('actuator_groups'):
+            for group in actuator_groups_data['actuator_groups']:
+                mm_to_description[group['tag_name']] = group['description']
+
         # Headers
         headers = [
             'Routine',
@@ -90,6 +95,7 @@ class ExcelExporter:
             'Action_Index',
             'Action_Name',
             'MM_Number',
+            'MM_Group_Description',
             'State',
             'Actuator_Count',
             'Actuators',
@@ -134,6 +140,10 @@ class ExcelExporter:
                     if action['state']:
                         state_formatted = f"TO {action['state'].upper()}"
                     
+                    # Get MM group description
+                    mm_number = action['mm_number'] or ''
+                    mm_description = mm_to_description.get(mm_number, '') if mm_number else ''
+
                     # Write one row per actuator
                     if not action['actuators']:
                         # No actuators, write one row
@@ -143,7 +153,8 @@ class ExcelExporter:
                             step_idx,
                             action['action_index'],
                             action['action_name'],
-                            action['mm_number'] or '',
+                            mm_number,
+                            mm_description,
                             state_formatted,
                             action['actuator_count'],
                             '',
@@ -164,7 +175,8 @@ class ExcelExporter:
                                 step_idx,
                                 action['action_index'],
                                 action['action_name'],
-                                action['mm_number'] or '',
+                                mm_number,
+                                mm_description,
                                 state_formatted,
                                 action['actuator_count'],
                                 actuator['description'],
@@ -223,48 +235,6 @@ class ExcelExporter:
                 cell.fill = self.data_fill  # Apply beige background
             row_num += 1
         
-        # Auto-adjust column widths
-        self._adjust_column_widths(ws)
-
-    def _create_actuator_groups_sheet(self, wb: Workbook, data: Dict[str, Any]):
-        """
-        Create the Actuator Groups sheet.
-
-        Args:
-            wb: Workbook object
-            data: Actuator groups data
-        """
-        ws = wb.create_sheet("Actuator Groups")
-
-        # Headers
-        headers = [
-            'Program',
-            'Tag Name',
-            'Description'
-        ]
-
-        # Write headers
-        for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num, value=header)
-            cell.fill = self.header_fill
-            cell.font = self.header_font
-            cell.alignment = self.header_alignment
-
-        # Write data
-        row_num = 2
-
-        for actuator_group in data['actuator_groups']:
-            row_data = [
-                actuator_group['program'],
-                actuator_group['tag_name'],
-                actuator_group['description']
-            ]
-
-            for col_num, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_num, value=value)
-                cell.fill = self.data_fill  # Apply beige background
-            row_num += 1
-
         # Auto-adjust column widths
         self._adjust_column_widths(ws)
 

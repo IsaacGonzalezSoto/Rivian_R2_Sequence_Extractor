@@ -80,10 +80,9 @@ The application runs interactively:
 Generated Excel files in `output/{L5X_filename}/`:
 - **{fixture_name}_{routine_name}.xlsx** (e.g., `010UA1_EmStatesAndSequences_R2.xlsx`) containing:
   - Complete_Flow: Integrated view of sequences and transitions
-  - Sequences_Actuators: Detailed sequences with actuators
+  - Sequences_Actuators: Detailed sequences with actuators and MM group descriptions (Column G: MM_Group_Description shows 'Group1 Clamps', 'Group 4 Pins', etc.)
   - Transitions: Transition permissions table
   - Digital_Inputs: All UDT_DigitalInputHal tags with Program/Tag names/Parent names/Part Assignment (e.g., 'Part1', 'Part2', or 'N/A')
-  - Actuator_Groups: All AOI_Actuator tags (MM groups) with Program/Tag Name/Description (e.g., 'MM1' - 'Group1 Clamps', 'MM4' - 'Group 4 Pins')
 
 **Note**: The fixture name is automatically extracted from the L5X filename. For files like `_010UA1_Fixture_Em0105_Program.L5X`, the output will be `010UA1_EmStatesAndSequences_R2.xlsx` instead of the old format `complete_EmStatesAndSequences_R2.xlsx`.
 

@@ -187,10 +187,9 @@ class ExtractionPipeline:
         try:
             self.excel_exporter.export(sequences_output, transitions_output, digital_inputs_output, actuator_groups_output, excel_path)
             logger.info(f"✓ Excel file saved to: {excel_path}")
-            logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences)")
+            logger.info(f"  - Sheet 1: Sequences_Actuators ({len(sequences_data)} sequences, {actuator_groups_output.get('group_count', 0)} MM groups)")
             logger.info(f"  - Sheet 2: Transitions ({transitions_output.get('transition_count', 0)} transitions)")
             logger.info(f"  - Sheet 3: Digital Inputs ({digital_inputs_output.get('input_count', 0)} tags)")
-            logger.info(f"  - Sheet 4: Actuator Groups ({actuator_groups_output.get('group_count', 0)} groups)")
         except Exception as e:
             logger.error(f"Failed to export Excel file: {excel_path} - {str(e)}")
             raise RuntimeError(f"Excel export failed: {str(e)}") from e
