@@ -29,10 +29,11 @@ class ExcelExporter:
         self.step_fill = PatternFill(start_color=ExcelColors.STEP_FILL, end_color=ExcelColors.STEP_FILL, fill_type="solid")
         self.step_font = Font(bold=True, color=ExcelColors.STEP_FONT, size=ExcelFontSizes.STEP)
         self.action_fill = PatternFill(start_color=ExcelColors.ACTION_FILL, end_color=ExcelColors.ACTION_FILL, fill_type="solid")
-        self.action_font = Font(bold=True, size=ExcelFontSizes.ACTION)
+        self.action_font = Font(bold=True, color=ExcelColors.ACTION_FONT, size=ExcelFontSizes.ACTION)
 
-        # Data cell background - soft beige for eye comfort
+        # Data cell styles - dark theme for eye comfort
         self.data_fill = PatternFill(start_color=ExcelColors.DATA_FILL, end_color=ExcelColors.DATA_FILL, fill_type="solid")
+        self.data_font = Font(color=ExcelColors.DATA_FONT)
 
     def _extract_kj_name(self, manifold: str) -> str:
         """
@@ -68,7 +69,8 @@ class ExcelExporter:
         # Extract valve number from '1A' -> '1'
         valve_num = valve_work.rstrip('AB')
 
-        return f"={kj_name}-QMB{valve_num}"
+        # Prefix with single quote to force Excel to treat as text (not formula)
+        return f"'={kj_name}-QMB{valve_num}"
 
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], valve_mappings_data: Dict[str, Any], output_path: str):
         """
@@ -148,7 +150,8 @@ class ExcelExporter:
             'Validation_Status',
             'Missing_Indices',
             'Controls_Manifold_Name',
-            'Controls_Valve_Name'
+            'Controls_Valve_Name',
+            'Description_Validation'
         ]
         
         # Write headers
@@ -206,6 +209,12 @@ class ExcelExporter:
                     controls_manifold_name = self._extract_kj_name(manifold)
                     controls_valve_name = self._build_valve_diagram_name(controls_manifold_name, valve_work)
 
+                    # Count duplicate descriptions in this MM group
+                    description_counts = {}
+                    for act in action['actuators']:
+                        desc = act['description']
+                        description_counts[desc] = description_counts.get(desc, 0) + 1
+
                     # Write one row per actuator
                     if not action['actuators']:
                         # No actuators, write one row
@@ -226,16 +235,29 @@ class ExcelExporter:
                             validation_status,
                             missing_indices,
                             controls_manifold_name,
-                            controls_valve_name
+                            controls_valve_name,
+                            'N/A'  # Description_Validation
                         ]
 
                         for col_num, value in enumerate(row_data, 1):
                             cell = ws.cell(row=row_num, column=col_num, value=value)
-                            cell.fill = self.data_fill  # Apply beige background
+                            cell.fill = self.data_fill
+                            cell.font = self.data_font
                         row_num += 1
                     else:
                         # One row per actuator
                         for actuator in action['actuators']:
+                            desc = actuator['description']
+                            count = description_counts[desc]
+
+                            # Determine validation status
+                            if count == 1:
+                                desc_validation = 'OK'
+                                is_duplicate = False
+                            else:
+                                desc_validation = f'Duplicate (appears {count} times)'
+                                is_duplicate = True
+
                             row_data = [
                                 routine_name,
                                 seq_idx,
@@ -253,16 +275,26 @@ class ExcelExporter:
                                 validation_status,
                                 missing_indices,
                                 controls_manifold_name,
-                                controls_valve_name
+                                controls_valve_name,
+                                desc_validation
                             ]
 
                             for col_num, value in enumerate(row_data, 1):
                                 cell = ws.cell(row=row_num, column=col_num, value=value)
-                                cell.fill = self.data_fill  # Apply beige background
+                                # Apply red fill for duplicates, dark theme for normal
+                                if col_num == 18 and is_duplicate:  # Column 18 is Description_Validation
+                                    cell.fill = PatternFill(start_color=ExcelColors.DUPLICATE_FILL, end_color=ExcelColors.DUPLICATE_FILL, fill_type='solid')
+                                    cell.font = Font(color=ExcelColors.DUPLICATE_FONT)
+                                else:
+                                    cell.fill = self.data_fill
+                                    cell.font = self.data_font
                             row_num += 1
-        
-        # Auto-adjust column widths
+
+        # Auto-adjust column widths first (for columns with data)
         self._adjust_column_widths(ws)
+
+        # Then apply dark background and set minimum widths for empty columns
+        self._apply_dark_background_to_entire_sheet(ws)
     
     def _create_digital_inputs_sheet(self, wb: Workbook, data: Dict[str, Any]):
         """
@@ -304,11 +336,15 @@ class ExcelExporter:
             
             for col_num, value in enumerate(row_data, 1):
                 cell = ws.cell(row=row_num, column=col_num, value=value)
-                cell.fill = self.data_fill  # Apply beige background
+                cell.fill = self.data_fill
+                cell.font = self.data_font
             row_num += 1
-        
-        # Auto-adjust column widths
+
+        # Auto-adjust column widths first (for columns with data)
         self._adjust_column_widths(ws)
+
+        # Then apply dark background and set minimum widths for empty columns
+        self._apply_dark_background_to_entire_sheet(ws)
 
     def _create_transitions_sheet(self, wb: Workbook, data: Dict[str, Any]):
         """
@@ -357,11 +393,15 @@ class ExcelExporter:
                 
                 for col_num, value in enumerate(row_data, 1):
                     cell = ws.cell(row=row_num, column=col_num, value=value)
-                    cell.fill = self.data_fill  # Apply beige background
+                    cell.fill = self.data_fill
+                    cell.font = self.data_font
                 row_num += 1
-        
-        # Auto-adjust column widths
+
+        # Auto-adjust column widths first (for columns with data)
         self._adjust_column_widths(ws)
+
+        # Then apply dark background and set minimum widths for empty columns
+        self._apply_dark_background_to_entire_sheet(ws)
     
     def _adjust_column_widths(self, ws):
         """
@@ -426,9 +466,12 @@ class ExcelExporter:
             
             # Write Sequence header
             row_num = self._write_sequence_section(ws, row_num, sequence)
-        
-        # Auto-adjust column widths
+
+        # Auto-adjust column widths first (for columns with data)
         self._adjust_column_widths(ws)
+
+        # Then apply dark background and set minimum widths for empty columns
+        self._apply_dark_background_to_entire_sheet(ws)
     
     def _write_transition_section(self, ws, row_num: int, transition: Dict[str, Any]) -> int:
         """
@@ -473,10 +516,11 @@ class ExcelExporter:
             ws.cell(row=row_num, column=4, value='')
             ws.cell(row=row_num, column=5, value=permission['comment'])
             
-            # Apply beige background to permission rows
+            # Apply dark theme to permission rows
             for col in range(1, 6):
                 cell = ws.cell(row=row_num, column=col)
                 cell.fill = self.data_fill
+                cell.font = self.data_font
             
             row_num += 1
         
@@ -625,11 +669,38 @@ class ExcelExporter:
             ws.cell(row=row_num, column=3, value=actuator['description'])
             ws.cell(row=row_num, column=4, value=mm_number)
             
-            # Apply beige background to actuator rows
+            # Apply dark theme to actuator rows
             for col in range(1, 6):
                 cell = ws.cell(row=row_num, column=col)
                 cell.fill = self.data_fill
+                cell.font = self.data_font
             
             row_num += 1
-        
+
         return row_num
+
+    def _apply_dark_background_to_entire_sheet(self, ws):
+        """
+        Apply dark background to entire visible sheet area for eye comfort.
+        Also sets minimum column width to cover white space on the right.
+
+        Args:
+            ws: Worksheet object
+        """
+        # Apply dark background to a large range
+        # Most sheets won't exceed 1000 rows x 26 columns (A-Z)
+        for row in ws.iter_rows(min_row=1, max_row=1000, min_col=1, max_col=26):
+            for cell in row:
+                # Only apply to cells that don't already have a fill (or have default white fill)
+                if not cell.fill or cell.fill.start_color.rgb in ['00000000', 'FFFFFFFF']:
+                    cell.fill = self.data_fill
+
+        # Set minimum width for empty columns to cover white space
+        # Columns with data will keep their auto-adjusted width
+        for col in range(1, 27):  # A-Z (1-26)
+            col_letter = ws.cell(row=1, column=col).column_letter
+            current_width = ws.column_dimensions[col_letter].width
+
+            # If column is narrow (< 15), set to 20 to cover white space
+            if current_width is None or current_width < 15:
+                ws.column_dimensions[col_letter].width = 20

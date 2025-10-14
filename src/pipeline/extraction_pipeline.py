@@ -26,6 +26,7 @@ from ..extractors.actuator_group_extractor import ActuatorGroupExtractor
 from ..extractors.valve_mapping_extractor import ValveMappingExtractor
 from ..validators.array_validator import ArrayValidator
 from ..exporters.excel_exporter import ExcelExporter
+from ..exporters.sequence_detail_exporter import SequenceDetailExporter
 
 logger = get_logger(__name__)
 
@@ -73,6 +74,7 @@ class ExtractionPipeline:
         self.valve_mapping_extractor = ValveMappingExtractor(debug=debug)
         self.validator = ArrayValidator(debug=debug)
         self.excel_exporter = ExcelExporter()
+        self.sequence_detail_exporter = SequenceDetailExporter()
 
     def _extract_fixture_name(self, l5x_file_path: str) -> str:
         """
@@ -169,6 +171,7 @@ class ExtractionPipeline:
                 fixture_output_folder = self.output_folder
 
             # Process each EmStatesAndSequences routine in this fixture
+            routine_outputs = {}  # Store outputs for Sequence Detail generation
             for routine_name in em_routines:
                 logger.info(f"  → Processing routine: {routine_name}")
                 routine_data = self.process_sequence_routine(
@@ -179,6 +182,16 @@ class ExtractionPipeline:
                     has_mapio=has_mapio
                 )
                 all_routines_data.append(routine_data)
+
+                # Store routine outputs for potential Sequence Detail generation
+                routine_outputs[routine_name] = routine_data
+
+            # Generate Sequence Detail files if Common + Model routines exist
+            self._generate_sequence_detail_files(
+                routine_outputs=routine_outputs,
+                program_name=program_name,
+                fixture_output_folder=fixture_output_folder
+            )
 
         # Final summary
         logger.info("="*60)
@@ -271,7 +284,12 @@ class ExtractionPipeline:
             'transitions_count': transitions_output.get('transition_count', 0),
             'digital_inputs_count': digital_inputs_output.get('input_count', 0),
             'actuator_groups_count': actuator_groups_output.get('group_count', 0),
-            'valve_mappings_count': valve_mappings_output.get('mapping_count', 0)
+            'valve_mappings_count': valve_mappings_output.get('mapping_count', 0),
+            # Add raw data for Sequence Detail generation
+            'sequences_output': sequences_output,
+            'digital_inputs_output': digital_inputs_output,
+            'actuator_groups_output': actuator_groups_output,
+            'valve_mappings_output': valve_mappings_output
         }
     
     def extract_transitions(self, routine_name: str, program_name: str = None) -> Dict[str, Any]:
@@ -476,15 +494,17 @@ class ExtractionPipeline:
                     
                     # Extract actuators
                     actuators = self.actuator_extractor.find_actuators_for_mm(
-                        self.navigator.get_root(), 
-                        mm_number
+                        self.navigator.get_root(),
+                        mm_number,
+                        program_name=program_name
                     )
-                    
+
                     # Validate actuators
                     validation = self.validator.validate_actuators(
                         self.navigator.get_root(),
                         mm_number,
-                        actuators
+                        actuators,
+                        program_name=program_name
                     )
                     
                     sequences[seq_idx][step_idx][action_idx] = {
@@ -605,3 +625,122 @@ class ExtractionPipeline:
 
         # Format output
         return self.valve_mapping_extractor.format_output(None, valve_mappings)
+
+    def _generate_sequence_detail_files(self, routine_outputs: Dict[str, Dict[str, Any]],
+                                       program_name: str, fixture_output_folder: str):
+        """
+        Generate Sequence Detail files for fixtures that have both Common and Model routines.
+
+        Args:
+            routine_outputs: Dictionary mapping routine_name to routine_data (includes sequences, digital_inputs, etc.)
+            program_name: Fixture program name
+            fixture_output_folder: Output folder for this fixture
+        """
+        # Find Common routine
+        common_routine = None
+        common_data = None
+        for routine_name in routine_outputs.keys():
+            if 'Common' in routine_name:
+                common_routine = routine_name
+                common_data = routine_outputs[routine_name]
+                break
+
+        if not common_routine:
+            if self.debug:
+                logger.debug(f"No Common routine found for {program_name}, skipping Sequence Detail generation")
+            return
+
+        # Find Model routines (not Common)
+        model_routines = []
+        for routine_name in routine_outputs.keys():
+            if 'Common' not in routine_name:
+                model_routines.append(routine_name)
+
+        if not model_routines:
+            if self.debug:
+                logger.debug(f"No Model routines found for {program_name}, skipping Sequence Detail generation")
+            return
+
+        logger.info("="*60)
+        logger.info(f"GENERATING SEQUENCE DETAIL FILES for {program_name}")
+        logger.info(f"Common routine: {common_routine}")
+        logger.info(f"Model routines: {', '.join(model_routines)}")
+        logger.info("="*60)
+
+        # For each model routine, generate a Sequence Detail file
+        for model_routine in model_routines:
+            model_data = routine_outputs[model_routine]
+
+            # Extract fixture name from program_name
+            fixture_name = program_name.lstrip('_')
+
+            # Build output filename
+            # Format: {fixture_name}_{model_routine}_Sequence_Detail.xlsx
+            detail_filename = f'{fixture_name}_{model_routine}_Sequence_Detail{EXCEL_FILE_EXTENSION}'
+            detail_path = os.path.join(fixture_output_folder, detail_filename)
+
+            try:
+                # Extract data needed for Sequence Detail export
+                common_sequences = common_data.get('sequences_output', {})
+                model_sequences = model_data.get('sequences_output', {})
+                digital_inputs = model_data.get('digital_inputs_output', {})
+                actuator_groups = model_data.get('actuator_groups_output', {})
+                valve_mappings = model_data.get('valve_mappings_output', {})
+
+                # Extract ALL actuators from all MM routines for this fixture
+                all_actuators = self._extract_all_actuators(program_name)
+
+                # Export Sequence Detail
+                self.sequence_detail_exporter.export(
+                    common_data=common_sequences,
+                    model_data=model_sequences,
+                    digital_inputs_data=digital_inputs,
+                    actuator_groups_data=actuator_groups,
+                    valve_mappings_data=valve_mappings,
+                    all_actuators_data=all_actuators,
+                    output_path=detail_path
+                )
+
+                logger.info(f"✓ Sequence Detail file saved to: {detail_path}")
+
+            except Exception as e:
+                logger.error(f"Failed to generate Sequence Detail for {model_routine}: {str(e)}")
+                if self.debug:
+                    import traceback
+                    logger.debug(traceback.format_exc())
+
+    def _extract_all_actuators(self, program_name: str) -> Dict[str, Any]:
+        """
+        Extract ALL actuators from all MM routines in a fixture program.
+        This is used for the Sequence Detail export to show all cylinders,
+        not just those that appear in sequences.
+
+        Args:
+            program_name: Fixture program name
+
+        Returns:
+            Dictionary with format: {'actuators_by_mm': {MM1: [...], MM2: [...], ...}}
+        """
+        actuators_by_mm = {}
+
+        # Scan for MM routines (MM1 through MM20)
+        for mm_num in range(1, 21):
+            mm_number = f'MM{mm_num}'
+
+            # Try to extract actuators for this MM
+            actuators = self.actuator_extractor.find_actuators_for_mm(
+                self.navigator.get_root(),
+                mm_number,
+                program_name=program_name
+            )
+
+            # Only include if actuators were found
+            if actuators:
+                actuators_by_mm[mm_number] = actuators
+
+        if self.debug:
+            logger.debug(f"Extracted all actuators for {program_name}:")
+            for mm, acts in actuators_by_mm.items():
+                logger.debug(f"  {mm}: {len(acts)} actuators")
+
+        return {'actuators_by_mm': actuators_by_mm}

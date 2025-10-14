@@ -22,7 +22,7 @@ class ArrayValidator:
         """
         self.debug = debug
     
-    def validate_actuators(self, root, mm_number: str, actuators: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def validate_actuators(self, root, mm_number: str, actuators: List[Dict[str, Any]], program_name: str = None) -> Dict[str, Any]:
         """
         Validates that all indices of the actuator array have a description.
 
@@ -30,14 +30,34 @@ class ArrayValidator:
             root: XML tree root
             mm_number: MM number (e.g., 'MM4')
             actuators: List of found actuators
+            program_name: Optional program name for scoping (multi-fixture support)
 
         Returns:
             Dictionary with validation information
         """
         navigator = XMLNavigator(root=root)
-        
+
         array_name = f'{mm_number}Cyls'
-        dimension = navigator.get_tag_dimension(array_name)
+
+        # Get dimension with program scope if provided
+        if program_name:
+            program_element = navigator.find_program_by_name(program_name)
+            if program_element:
+                tag = program_element.find(f".//Tag[@Name='{array_name}']")
+                if tag is not None:
+                    dimensions_str = tag.get('Dimensions', '')
+                    try:
+                        dimension = int(dimensions_str) if dimensions_str else None
+                    except ValueError:
+                        dimension = None
+                else:
+                    dimension = None
+            else:
+                if self.debug:
+                    logger.warning(f"Program not found: {program_name}, searching globally")
+                dimension = navigator.get_tag_dimension(array_name)
+        else:
+            dimension = navigator.get_tag_dimension(array_name)
         
         validation = {
             'is_valid': True,

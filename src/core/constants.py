@@ -39,24 +39,29 @@ TAG_TYPE_DIGITAL_INPUT = 'UDT_DigitalInputHal'
 # ============================================================================
 
 class ExcelColors:
-    """Excel cell colors for styling sheets."""
+    """Excel cell colors for styling sheets - Dark theme for eye comfort."""
 
-    # Header colors
-    HEADER_FILL = "366092"
-    HEADER_FONT = "FFFFFF"
+    # Header colors - Dark theme
+    HEADER_FILL = "1A1A1A"  # Almost black
+    HEADER_FONT = "00D9FF"  # Bright cyan
 
-    # Complete Flow sheet colors
-    TRANSITION_FILL = "4472C4"
-    TRANSITION_FONT = "FFFFFF"
-    SEQUENCE_FILL = "70AD47"
-    SEQUENCE_FONT = "FFFFFF"
-    STEP_FILL = "FFC000"
-    STEP_FONT = "000000"
-    ACTION_FILL = "E7E6E6"
-    ACTION_FONT = "000000"
+    # Complete Flow sheet colors - Dark theme
+    TRANSITION_FILL = "1E3A5F"  # Dark navy blue
+    TRANSITION_FONT = "66B3FF"  # Light blue
+    SEQUENCE_FILL = "1F4E2D"  # Dark green
+    SEQUENCE_FONT = "90EE90"  # Light green
+    STEP_FILL = "4A3B00"  # Dark gold
+    STEP_FONT = "FFD966"  # Light gold
+    ACTION_FILL = "3A3A3A"  # Dark gray
+    ACTION_FONT = "D0D0D0"  # Light gray
 
-    # Data cell background - soft beige for eye comfort
-    DATA_FILL = "F5F5DC"
+    # Data cell background - Dark theme for eye comfort
+    DATA_FILL = "2D2D2D"  # Charcoal gray
+    DATA_FONT = "E0E0E0"  # Light gray text
+
+    # Duplicate warning - Dark theme
+    DUPLICATE_FILL = "5A1A1A"  # Dark red
+    DUPLICATE_FONT = "FF6B6B"  # Light red
 
 # ============================================================================
 # EXCEL FONT SIZES

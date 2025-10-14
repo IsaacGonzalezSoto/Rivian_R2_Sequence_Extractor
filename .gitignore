@@ -24,6 +24,9 @@ output/
 *.csv
 *.xlsx
 
+# Test files
+tests/
+
 # L5X files (optional - decide if you want to version them)
 *.L5X
 
