@@ -1080,13 +1080,13 @@ class SequenceDetailExporter:
 
     def _format_actor_group_name(self, name: str) -> str:
         """
-        Format actor/group name: "MM1_MMB1" → "=MM1-MMB1"
+        Format actor/group name: "MM1_MMB1" → "'=MM1-MMB1"
 
         Args:
             name: Original name with underscore separator
 
         Returns:
-            Formatted name with = prefix and - separator, or None if empty
+            Formatted name with '= prefix and - separator, or None if empty
         """
         if not name:
             return None
@@ -1094,8 +1094,8 @@ class SequenceDetailExporter:
         # Replace underscore with hyphen
         formatted = name.replace('_', '-')
 
-        # Add = prefix to prevent Excel formula interpretation
-        return f"={formatted}"
+        # Add '= prefix (single quote + equals) to force Excel to treat as text (not formula)
+        return f"'={formatted}"
 
     def _adjust_column_widths(self, ws):
         """
