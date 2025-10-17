@@ -57,7 +57,7 @@ class ExcelColors:
 
     # Data cell background - Dark theme for eye comfort
     DATA_FILL = "2D2D2D"  # Charcoal gray
-    DATA_FONT = "E0E0E0"  # Light gray text
+    DATA_FONT = "FFFFFF"  # White text for maximum contrast
 
     # Duplicate warning - Dark theme
     DUPLICATE_FILL = "5A1A1A"  # Dark red

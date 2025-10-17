@@ -69,8 +69,9 @@ class ExcelExporter:
         # Extract valve number from '1A' -> '1'
         valve_num = valve_work.rstrip('AB')
 
-        # Prefix with single quote to force Excel to treat as text (not formula)
-        return f"'={kj_name}-QMB{valve_num}"
+        # Return the clean value without any prefix
+        # The apostrophe will be added when writing to the cell
+        return f"={kj_name}-QMB{valve_num}"
 
     def export(self, sequences_data: Dict[str, Any], transitions_data: Dict[str, Any], digital_inputs_data: Dict[str, Any], actuator_groups_data: Dict[str, Any], valve_mappings_data: Dict[str, Any], output_path: str):
         """
@@ -93,8 +94,8 @@ class ExcelExporter:
         # Create Complete_Flow sheet (new main view)
         self._create_complete_flow_sheet(wb, sequences_data, transitions_data)
 
-        # Create sequences sheet with actuator group descriptions and valve mappings
-        self._create_sequences_sheet(wb, sequences_data, actuator_groups_data, valve_mappings_data)
+        # Create sequences sheet with actuator group descriptions, valve mappings, and transitions
+        self._create_sequences_sheet(wb, sequences_data, actuator_groups_data, valve_mappings_data, transitions_data)
 
         # Create transitions sheet if there's data
         if transitions_data and transitions_data.get('transitions'):
@@ -109,7 +110,7 @@ class ExcelExporter:
         # Save workbook
         wb.save(output_path)
     
-    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any], actuator_groups_data: Dict[str, Any] = None, valve_mappings_data: Dict[str, Any] = None):
+    def _create_sequences_sheet(self, wb: Workbook, data: Dict[str, Any], actuator_groups_data: Dict[str, Any] = None, valve_mappings_data: Dict[str, Any] = None, transitions_data: Dict[str, Any] = None):
         """
         Create the Sequences_Actuators sheet.
 
@@ -118,6 +119,7 @@ class ExcelExporter:
             data: Sequences data
             actuator_groups_data: Actuator groups data (optional)
             valve_mappings_data: Valve mappings data (optional)
+            transitions_data: Transitions data (optional)
         """
         ws = wb.create_sheet("Sequences_Actuators")
 
@@ -131,6 +133,13 @@ class ExcelExporter:
         mm_to_valve = {}
         if valve_mappings_data and valve_mappings_data.get('valve_mappings'):
             mm_to_valve = valve_mappings_data['valve_mappings']
+
+        # Create transition mapping: {seq_idx: transition_data}
+        transition_map = {}
+        if transitions_data and transitions_data.get('transitions'):
+            for transition in transitions_data['transitions']:
+                trans_idx = transition['transition_index']
+                transition_map[trans_idx] = transition
 
         # Headers
         headers = [
@@ -240,7 +249,13 @@ class ExcelExporter:
                         ]
 
                         for col_num, value in enumerate(row_data, 1):
-                            cell = ws.cell(row=row_num, column=col_num, value=value)
+                            # Special handling for Controls_Valve_Name column (column 17)
+                            # Add apostrophe prefix to prevent formula evaluation for values starting with =
+                            if col_num == 17 and value and value != 'N/A' and value.startswith('='):
+                                cell = ws.cell(row=row_num, column=col_num)
+                                cell.value = f"'{value}"  # Apostrophe prefix forces text interpretation
+                            else:
+                                cell = ws.cell(row=row_num, column=col_num, value=value)
                             cell.fill = self.data_fill
                             cell.font = self.data_font
                         row_num += 1
@@ -280,7 +295,13 @@ class ExcelExporter:
                             ]
 
                             for col_num, value in enumerate(row_data, 1):
-                                cell = ws.cell(row=row_num, column=col_num, value=value)
+                                # Special handling for Controls_Valve_Name column (column 17)
+                                # Add apostrophe prefix to prevent formula evaluation for values starting with =
+                                if col_num == 17 and value and value != 'N/A' and value.startswith('='):
+                                    cell = ws.cell(row=row_num, column=col_num)
+                                    cell.value = f"'{value}"  # Apostrophe prefix forces text interpretation
+                                else:
+                                    cell = ws.cell(row=row_num, column=col_num, value=value)
                                 # Apply red fill for duplicates, dark theme for normal
                                 if col_num == 18 and is_duplicate:  # Column 18 is Description_Validation
                                     cell.fill = PatternFill(start_color=ExcelColors.DUPLICATE_FILL, end_color=ExcelColors.DUPLICATE_FILL, fill_type='solid')
@@ -290,12 +311,76 @@ class ExcelExporter:
                                     cell.font = self.data_font
                             row_num += 1
 
+            # After all actuator rows for this sequence, append Fixed State and Wait Conditions (transition data)
+            if seq_idx in transition_map:
+                transition = transition_map[seq_idx]
+                row_num = self._write_fixed_state_section(ws, row_num, seq_idx, transition)
+
         # Auto-adjust column widths first (for columns with data)
         self._adjust_column_widths(ws)
 
         # Then apply dark background and set minimum widths for empty columns
         self._apply_dark_background_to_entire_sheet(ws)
-    
+
+    def _write_fixed_state_section(self, ws, row_num: int, seq_idx: int, transition: Dict[str, Any]) -> int:
+        """
+        Write Fixed State header and Wait Conditions (transition permissions) after sequence actuators.
+
+        Args:
+            ws: Worksheet
+            row_num: Current row number
+            seq_idx: Sequence index
+            transition: Transition data
+
+        Returns:
+            Updated row number
+        """
+        # Get transition name (e.g., "HomePos_R2S", "FxtToWorkPos1")
+        transition_name = transition.get('transition_name', f'State{seq_idx}')
+
+        # Write Fixed State header row
+        # Use column 2 (Sequence) for "Fixed State" label, column 3 for the state name
+        fixed_state_cell = ws.cell(row=row_num, column=2, value='Fixed State')
+        fixed_state_cell.fill = self.transition_fill
+        fixed_state_cell.font = self.transition_font
+
+        state_name_cell = ws.cell(row=row_num, column=3, value=transition_name)
+        state_name_cell.fill = self.transition_fill
+        state_name_cell.font = self.transition_font
+
+        # Fill remaining cells in the row with transition style
+        for col in range(1, 19):  # Columns 1-18
+            if col not in [2, 3]:  # Skip columns already filled
+                cell = ws.cell(row=row_num, column=col)
+                cell.fill = self.transition_fill
+
+        row_num += 1
+
+        # Write Wait Condition rows (permissions)
+        for permission in transition['permissions']:
+            # Column 2: Wait Condition label
+            # Column 3: Permission index
+            # Column 4: Permission value
+            # Column 5: Comment
+
+            ws.cell(row=row_num, column=2, value='Wait Condition')
+            ws.cell(row=row_num, column=3, value=permission['permission_index'])
+            ws.cell(row=row_num, column=4, value=permission['permission_value'])
+            ws.cell(row=row_num, column=5, value=permission['comment'])
+
+            # Apply dark theme to wait condition rows
+            for col in range(1, 19):
+                cell = ws.cell(row=row_num, column=col)
+                cell.fill = self.data_fill
+                cell.font = self.data_font
+
+            row_num += 1
+
+        # Add blank row for separation before next sequence
+        row_num += 1
+
+        return row_num
+
     def _create_digital_inputs_sheet(self, wb: Workbook, data: Dict[str, Any]):
         """
         Create the Digital Inputs sheet.

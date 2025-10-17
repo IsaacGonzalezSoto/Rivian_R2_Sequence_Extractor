@@ -287,6 +287,7 @@ class ExtractionPipeline:
             'valve_mappings_count': valve_mappings_output.get('mapping_count', 0),
             # Add raw data for Sequence Detail generation
             'sequences_output': sequences_output,
+            'transitions_output': transitions_output,
             'digital_inputs_output': digital_inputs_output,
             'actuator_groups_output': actuator_groups_output,
             'valve_mappings_output': valve_mappings_output
@@ -686,6 +687,7 @@ class ExtractionPipeline:
                 digital_inputs = model_data.get('digital_inputs_output', {})
                 actuator_groups = model_data.get('actuator_groups_output', {})
                 valve_mappings = model_data.get('valve_mappings_output', {})
+                transitions = model_data.get('transitions_output', {})
 
                 # Extract ALL actuators from all MM routines for this fixture
                 all_actuators = self._extract_all_actuators(program_name)
@@ -698,6 +700,7 @@ class ExtractionPipeline:
                     actuator_groups_data=actuator_groups,
                     valve_mappings_data=valve_mappings,
                     all_actuators_data=all_actuators,
+                    transitions_data=transitions,
                     output_path=detail_path
                 )
 
